@@ -1,3 +1,35 @@
+# Progetto 0: Classificazione Induttiva di Prodotti (Embedding vs. Centralità)
+Questa è l'idea più forte perché sfrutta i paper sugli embedding e l' idea su PageRank, usando le categorie 
+ground-truth del dataset.
+
+**Titolo Proposto** 
+"Inductive Product Classification in Co-Purchase Networks: Comparing GraphSAGE against Centrality and Transductive 
+Embeddings"
+
+**Paper di Riferimento**
+Network embeddings.pdf (principalmente GraphSAGE) e la tua idea di PageRank.
+
+**Contesto**
+Il dataset ha le categorie dei prodotti (es. "Libri", "Elettronica"). Possiamo formulare un task di node classification: 
+"Data la rete di co-acquisti, riesci a predire la categoria di un prodotto?"
+
+**L'Implementazione (Il Confronto)**
+Si implementano e confrontano diversi metodi per generare feature per i nodi, da dare poi in pasto a un classificatore 
+(es. Random Forest o MLP):
+* Baseline 1 (La tua idea): Si implementa il PageRank Pesato. Si usano i punteggi di PageRank, e magari altre centralità
+  (weighted in/out-degree), come feature del nodo.
+* Baseline 2 (Classica): Si implementa un metodo transductive come Node2Vec. Bisogna modificare le random walk per
+  rispettare i pesi degli archi (è più probabile seguire un arco con peso maggiore).
+* Tecnica Avanzata (dal Paper): Si implementa GraphSAGE (da Network embeddings.pdf). GraphSAGE è induttivo. Per le
+  feature iniziali dei nodi (che GraphSAGE richiede), si possono usare le feature della Baseline 1 (PageRank, degree).
+
+**La Valutazione (Il Test Chiave)**
+Si addestrano i modelli su un sottoinsieme di categorie (es. "Libri" e "Musica").
+Si valuta la loro capacità di classificare prodotti in categorie mai viste durante l'addestramento (es. "Videogiochi").
+
+**Ipotesi**
+PageRank e Node2Vec (transductive) falliranno o andranno male, perché imparano un embedding per i nodi visti. GraphSAGE 
+(inductive) riuscirà a generalizzare, perché impara una funzione per aggregare i vicini.
 
 # Progetto 1: Analisi dell'"Ecosistema Amazon" (Analisi di Centralità e Community)
 
