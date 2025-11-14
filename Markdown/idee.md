@@ -56,6 +56,74 @@ PageRank e Node2Vec (transductive) falliranno o andranno male, perché imparano 
     * **L'Analisi (qui sta il bello):** Ora, usa i tuoi metadati! Per ogni community che hai trovato, guarda la `categoria` di prodotto dominante. Hai appena scoperto algoritmicamente "Elettronica", "Libri di cucina", "Attrezzi da giardino", ecc.
     * Puoi anche analizzare la *densità* di queste comunità. Il `Clustering Coefficient` medio all'interno di una comunità ti dice se si tratta di un "kit" stretto (tutti gli articoli vengono acquistati insieme) o di un gruppo più ampio.
 
+# Proposta 1: L'Estensione Algoritmica  
+### **Titolo del Progetto:** *Beyond PageRank: Sviluppo di un Recommender System Ibrido su Grafi Eterogenei*
+
+### Il Problema  
+Il PageRank tradizionale è *cieco*: tratta tutti i nodi e gli archi allo stesso modo.  
+Nel contesto di Amazon, un co-acquisto tra un cavo da 5€ e un libro da 20€ riceve lo stesso peso di un co-acquisto tra una TV da 2000€ e una soundbar da 400€.  
+Questo è poco realistico e porta a raccomandazioni scarse.
+
+### La Soluzione  
+Progettiamo un nuovo algoritmo di ranking che tenga conto delle proprietà dei nodi e degli archi: un *PageRank 2.0*.
+
+---
+
+## Divisione dei Ruoli (3 Persone)
+
+### **1. Persona A — L'Esperto di Dati e Baseline**  
+**Compito:** Implementare il *Personalized PageRank (PPR)*.  
+Questo modello risponde alla domanda:  
+→ *Se parto da questo prodotto, dove è più probabile che arrivi tramite click casuali?*  
+
+**Tecnologia:** PPR è ideale per ottenere raccomandazioni *Prodotti Correlati*.  
+**Dataset:** Dataset Amazon (prodotti, co-acquisti, categorie, recensioni).  
+**Obiettivo:** Costruire la *baseline* con cui confrontare gli algoritmi avanzati.
+
+---
+
+### **2. Persona B — L'Architetto dei Grafi Eterogenei (H-Rank)**  
+**Compito:** Modellare un grafo che rifletta la complessità reale.  
+
+**Tipi di Nodi:**  
+- Prodotto  
+- Utente  
+- Categoria  
+- Brand  
+
+**Meta-Paths (esempi):**  
+- P → C → P (similitudine di categoria)  
+- P → U → P (collaborative filtering)  
+- P → B → P (stesso brand)  
+
+**Obiettivo:** Combinare pesi diversi lungo meta-percorsi definendo un *Heterogeneous Random Walk*.
+
+---
+
+### **3. Persona C — Lo Specialista di ML e Ponderazione (W-Rank)**  
+**Compito:** Rendere *pesati* gli archi. Il peso non è più 1. Viene *appreso*.  
+
+**Possibili Pesi:**
+| Tipo | Descrizione |
+|---|---|
+| Economico | Prodotti con prezzo simile ricevono peso maggiore |
+| Recensioni | Più recensioni positive → maggiore compatibilità |
+| Semantico (PRO) | Usare embeddings (es. Sentence Transformer) e similitudine coseno |
+
+**Obiettivo:** Integrare i pesi nel grafo eterogeneo sviluppato da Persona B.
+
+---
+
+### Obiettivo Finale dell’Applicazione  
+Una demo o web-app che, dato un **ID Prodotto**, mostra:
+
+| Metodo | Risultato |
+|---|---|
+| PageRank Base | Raccomandazioni generiche e deboli |
+| PPR | Raccomandazioni contestualizzate |
+| H-W-Rank (nostro) | Raccomandazioni intelligenti e non banali |
+
+[Immagine di un grafico di benchmark delle prestazioni]
 ---
 
 ### Progetto 2: "Kit vs. Utility" (Analisi della Struttura Locale)
