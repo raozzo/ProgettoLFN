@@ -1,2 +1,2 @@
-Data/amazon-meta.txt filter=lfs diff=lfs merge=lfs -text
-Data/amazon-meta.txt.gz filter=lfs diff=lfs merge=lfs -text
+Code/data/amazon-meta.txt filter=lfs diff=lfs merge=lfs -text
+Code/data/amazon-meta.txt.gz filter=lfs diff=lfs merge=lfs -text
