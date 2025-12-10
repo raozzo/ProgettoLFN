@@ -14,3 +14,5 @@ def get_pagerank(G, alpha=0.85):
     Returns:
         dict: Dizionario {nodo_id: score_pagerank}
     """
+    print(f"Calcolo PageRank su {len(G)} nodi...")
+    return nx.pagerank(G, alpha=alpha)
