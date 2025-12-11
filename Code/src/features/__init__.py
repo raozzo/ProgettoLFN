@@ -1,1 +1,1 @@
-from .structural_alg import get_pagerank
+from .structural_alg import get_pagerank, get_clustering_coefficient, get_approx_betweenness

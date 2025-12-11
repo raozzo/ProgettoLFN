@@ -16,3 +16,10 @@ def get_pagerank(G, alpha=0.85):
     """
     print(f"Calcolo PageRank su {len(G)} nodi...")
     return nx.pagerank(G, alpha=alpha)
+
+
+def get_clustering_coefficient(G):
+    return nx.clustering(G)
+
+def get_approx_betweenness(G, k=100000, seed=42):
+    return nx.betweenness_centrality(G, k=k, normalized=True, seed=seed)
