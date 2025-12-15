@@ -1,3 +1,4 @@
 .idea/
 Code/data/review_scores.csv
 __pycache__/
+Code/.DS_Store
