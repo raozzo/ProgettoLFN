@@ -3,7 +3,7 @@ import numpy as np
 
 from datasketch import HyperLogLog
 import hashlib
-import cupy as cp
+#NOTE spostato cupy solo in se GPU 
 import time
 import copy
 import pandas as pd
@@ -43,6 +43,7 @@ def get_harmonic_centrality(G, p=10, version="CPU_opt"):
     if version == "CPU":
         return harmonic_v2_CPU(G, p)
     elif version == "GPU":
+        import cupy as cp
         return harmonic_v3_GPU(G, p)
     return None
 
