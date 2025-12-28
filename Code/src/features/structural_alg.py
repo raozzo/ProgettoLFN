@@ -1,7 +1,9 @@
+import random
+from collections import deque
 import networkx as nx
 import numpy as np
 
-from datasketch import HyperLogLog
+#from datasketch import HyperLogLog
 import hashlib
 #NOTE spostato cupy solo in se GPU 
 import time
@@ -26,10 +28,107 @@ def get_pagerank(G, alpha=0.85):
 
 
 def get_clustering_coefficient(G):
-    return nx.clustering(G)
+    """
+    Calculate the clustering coefficient for all nodes (i.e., the fraction of triangles around each node).
+
+    Args:
+        G (nx.DiGraph): The directed graph.
+
+    Returns:
+        dict: Dictionary {node_id: clustering_coefficient}
+    """
+
+    clustering = {}
+
+    for v in G.nodes():
+        neighbors = list(G.successors(v)) + list(G.predecessors(v))
+        neighbors = list(set(neighbors))  # Remove duplicates
+        k = len(neighbors)
+        if k < 2:
+            clustering[v] = 0.0
+            continue
+
+        # Count the number of edges between neighbors
+        links = 0
+        for i in range(k):
+            for j in range(k):
+                if i != j and G.has_edge(neighbors[i], neighbors[j]):
+                    links += 1
+
+        # Each edge is counted twice in a directed graph
+        # for directed graphs, the number of possible edges between neighbors is k * (k - 1)
+        clustering[v] = links / (k * (k - 1))
+
+    return clustering
+    #return nx.clustering(G)
 
 def get_approx_betweenness(G, k=100000, seed=42):
-    return nx.betweenness_centrality(G, k=k, normalized=True, seed=seed)
+    """
+    Calculate the approximate betweenness centrality for all nodes using sampling.
+    
+    Args:
+        G (nx.DiGraph): The directed graph.
+        k (int): Number of samples for approximation.
+        seed (int): Random seed for reproducibility.
+
+    Returns:
+        dict: Dictionary {node_id: approximate_betweenness_score}
+    """
+
+    random.seed(seed)
+    nodes = list(G.nodes())
+    if k > len(nodes):
+        k = len(nodes)
+
+    # Sample k nodes uniformly at random
+    sampled_nodes = random.sample(nodes, k)
+
+    # Initilaze betweenness centrality dictionary
+    betweenness = {node: 0.0 for node in nodes}
+
+    for s in sampled_nodes:
+
+        # Phase 1: Single-Source Shortest Paths (SSSP) (BFS(G,s) for unweighted graphs)
+        S=[]
+        P = {w : [] for w in nodes}
+        sigma = {w : 0 for w in nodes}
+        sigma[s] = 1
+        dist = {w : -1 for w in nodes}
+        dist[s] = 0
+        queue = deque([s])
+
+        while queue:
+            v = queue.popleft()
+            S.append(v)
+            for w in G.neighbors(v):
+                # Find minimum path
+                if dist[w] < 0:
+                    dist[w] = dist[v] + 1
+                    queue.append(w)
+                # Count minimum paths
+                if dist[w] == dist[v] + 1:
+                    sigma[w] += sigma[v]
+                    P[w].append(v)
+
+        # Phase 2: Accumulation
+        delta = {w : 0 for w in nodes}
+        while S:
+            w = S.pop()
+            for v in P[w]:
+                delta[v] += (sigma[v] / sigma[w]) * (1 + delta[w])
+            if w != s:
+                betweenness[w] += delta[w]
+
+    # Normalize the betweenness scores for directed graphs: divide by (n-1)(n-2)
+    # Multiply by n/k to scale the scores based on the number of samples
+    n = len(nodes)
+    scaling_factor = n / k
+    normalization_factor = 1 / ((n - 1) * (n - 2))
+    for node in betweenness:
+        betweenness[node] *= scaling_factor * normalization_factor
+        
+    return betweenness
+    #return nx.betweenness_centrality(G, k=k, normalized=True, seed=seed)
 
 def get_harmonic_centrality(G, p=10, version="CPU_opt"):
     """
