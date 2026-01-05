@@ -27,44 +27,144 @@ def get_pagerank(G, alpha=0.85):
     return nx.pagerank(G, alpha=alpha)
 
 
-def get_clustering_coefficient(G):
+def get_clustering_coefficient(G, M=1000):
     """
     Calculate the clustering coefficient for all nodes (i.e., the fraction of triangles around each node).
+    We make use of the definition adapted for directed graphs.
+    Implementation exploits Reservoir sampling.
 
     Args:
         G (nx.DiGraph): The directed graph.
+        M (int): edge memory size.
 
     Returns:
         dict: Dictionary {node_id: clustering_coefficient}
     """
 
-    clustering = {}
+    # Initialization
+    S = [] # list of sampled edges
+    t = 0 # time step
+    t_S = {v: 0 for v in G.nodes} # number of triangles around each node initialized to 0
+    d = {v: 0 for v in G.nodes} # degree of each node initialized to 0
 
-    for v in G.nodes():
-        neighbors = list(G.successors(v)) + list(G.predecessors(v))
-        neighbors = list(set(neighbors))  # Remove duplicates
-        k = len(neighbors)
-        if k < 2:
-            clustering[v] = 0.0
+    # Initialize clustering coefficient dictionary to 0
+    cc = {v: 0.0 for v in G.nodes}
+
+    # Transform G.edges into a stream of edges sigma
+    sigma = list(G.edges)
+    random.shuffle(sigma) # shuffle edges to simulate random stream
+
+    # Process each edge in the stream (1 pass)
+    for (u, v) in sigma:
+        t += 1
+
+        # Update degree counts of u and v
+        d[u] += 1
+        d[v] += 1
+
+        # Neighborhood of u intesected v contained in S
+        N_u_S = {x for (x, y) in S if y==u} | {y for (x, y) in S if x==u}
+        N_v_S = {x for (x, y) in S if y==v} | {y for (x, y) in S if x==v}
+        N_uv_S = N_u_S & N_v_S
+
+        # For each c in N_uv_S, increment triangle count for u,v,c
+        for c in N_uv_S:
+            t_S[u] += 1
+            t_S[v] += 1
+            t_S[c] += 1
+
+        # Reservoir sampling
+
+        # CASE 1: add edge (u,v) to S if |S| < M
+        if t <= M:
+            S.append((u,v))
+
+        # CASE 2: add edge (u,v) to S with probability M/t, 
+        # replacing a random edge in S, chosen uniformly at random with probability 1/M
+        else:
+            prob = random.uniform(0,1)
+            if prob <= M / t:
+                index = random.randint(0, M-1)
+                S[index] = (u,v)
+
+    # Compute clustering coefficient for each node
+    for v in G.nodes:
+        cc[v] = (t_S[v]) / (d[v] * (d[v] -1)) # we should not multiply by 2 (directed graph adaptation)
+
+        # correction for sampling ???
+        # p = M / t
+        # cc[v] /= p**2
+
+    return cc
+
+
+def bfs_directed(G, s, t):
+    """
+    Perform BFS on a directed graph from a source node.
+    Adapted to handle directed edges and to store all shortest paths.
+    
+    Args:
+        G (nx.DiGraph): The directed graph.
+        s: Source node.
+        t: Target node.
+    
+    Returns:
+        dict: Dictionary {node_id: list of shortest paths from s to t}
+    """
+    # Initialize structures
+    distance = {v: float('inf') for v in G.nodes()}
+    predecessors = {v: [] for v in G.nodes()}
+
+    distance[s] = 0
+    Q = deque([s])
+    found_target_distance = float('inf')
+
+    # BFS traversal to build predecessors map
+    # We stop exploring paths longer than the shortest path to t
+    # This ensures we only find shortest paths
+    while Q:
+        v = Q.popleft()
+
+        # If we reached the target, record the distance
+        if distance[v] >= found_target_distance:
             continue
 
-        # Count the number of edges between neighbors
-        links = 0
-        for i in range(k):
-            for j in range(k):
-                if i != j and G.has_edge(neighbors[i], neighbors[j]):
-                    links += 1
+        # Explore successors of v (outgoing edges) 
+        for w in G.successors(v):
+            # CASE 1: first time visiting w (standard BFS)
+            if distance[w] == float('inf'):
+                distance[w] = distance[v] + 1
+                predecessors[w].append(v)
+                Q.append(w)
+                if w == t:
+                    found_target_distance = distance[w]
+            # CASE 2: found another shortest path to w, which was already visited
+            elif distance[w] == distance[v] + 1:
+                predecessors[w].append(v)
+    
+    # Reconstruct all SPs from s to t backtracking using predecessors
+    all_SPs = [] # List to store all shortest paths
 
-        # Each edge is counted twice in a directed graph
-        # for directed graphs, the number of possible edges between neighbors is k * (k - 1)
-        clustering[v] = links / (k * (k - 1))
+    # Helper function for backtracking
+    def FindPaths(v, current_path):
+        if v == s:
+            all_SPs.append(current_path[::-1])  # Append reversed path
+            return
+        for pred in predecessors[v]:
+            FindPaths(pred, current_path + [pred])
 
-    return clustering
-    #return nx.clustering(G)
+    if distance[t] != float('inf'):
+        FindPaths(t, [t])
 
-def get_approx_betweenness(G, k=100000, seed=42):
+    return all_SPs
+
+# PROBLEM: In the slides the professor says that we should sample k couples (s,t) from VxV with s != t and then find all shortest paths between them.
+# In NewtorkX implementation instead, they sample k source nodes and compute shortest paths from each of them to all other nodes.
+# => to understand if we prefer to stick to the slides or to NetworkX implementation.
+def get_approx_betweenness(G, k=10, seed=42):
     """
     Calculate the approximate betweenness centrality for all nodes using sampling.
+    Implementation of Brande's algorithm adapted for directed graphs
     
     Args:
         G (nx.DiGraph): The directed graph.
@@ -74,60 +174,48 @@ def get_approx_betweenness(G, k=100000, seed=42):
     Returns:
         dict: Dictionary {node_id: approximate_betweenness_score}
     """
-
+    # Set random seed for reproducibility and sample k nodes
     random.seed(seed)
-    nodes = list(G.nodes())
-    if k > len(nodes):
-        k = len(nodes)
+    V = list(G.nodes())
+    if k > len(V):
+        k = len(V)
 
-    # Sample k nodes uniformly at random
-    sampled_nodes = random.sample(nodes, k)
+    # Initialize betweenness centrality dictionary to zero
+    b = {v: 0.0 for v in V}
 
-    # Initilaze betweenness centrality dictionary
-    betweenness = {node: 0.0 for node in nodes}
+    for i in range(k):
 
-    for s in sampled_nodes:
+        # Choose uniformly at random (s,t) from V with s != t
+        """
+        check = False
+        while check == False:
+            s = random.choice(V)
+            t = random.choice(V)
+            if s != t:
+                check = True
+        """
+        s, t = random.sample(V, 2)
 
-        # Phase 1: Single-Source Shortest Paths (SSSP) (BFS(G,s) for unweighted graphs)
-        S=[]
-        P = {w : [] for w in nodes}
-        sigma = {w : 0 for w in nodes}
-        sigma[s] = 1
-        dist = {w : -1 for w in nodes}
-        dist[s] = 0
-        queue = deque([s])
+        # Find all shortest paths from s to all other nodes using BFS adapted for directed graphs and store them in a list P_st
+        P_st = bfs_directed(G, s, t)
 
-        while queue:
-            v = queue.popleft()
-            S.append(v)
-            for w in G.neighbors(v):
-                # Find minimum path
-                if dist[w] < 0:
-                    dist[w] = dist[v] + 1
-                    queue.append(w)
-                # Count minimum paths
-                if dist[w] == dist[v] + 1:
-                    sigma[w] += sigma[v]
-                    P[w].append(v)
+        # Choose a shortest path uniformly at random from P_st
+        if P_st: # Check if there are any paths
+            path = random.choice(P_st)
 
-        # Phase 2: Accumulation
-        delta = {w : 0 for w in nodes}
-        while S:
-            w = S.pop()
-            for v in P[w]:
-                delta[v] += (sigma[v] / sigma[w]) * (1 + delta[w])
-            if w != s:
-                betweenness[w] += delta[w]
+            # For each node v in the chosen path (but s and t), increment b[v] by 1/k
+            for v in path:
+                if v != s and v != t:
+                    b[v] += 1.0 / k
 
     # Normalize the betweenness scores for directed graphs: divide by (n-1)(n-2)
-    # Multiply by n/k to scale the scores based on the number of samples
-    n = len(nodes)
-    scaling_factor = n / k
-    normalization_factor = 1 / ((n - 1) * (n - 2))
-    for node in betweenness:
-        betweenness[node] *= scaling_factor * normalization_factor
-        
-    return betweenness
+    # Multiply by n/k to scale the scores based on the number of samples ???
+    n = len(V)
+    normalization_factor = 1 / (n * (n - 1))
+    for v in b:
+        b[v] *= normalization_factor
+
+    return b
     #return nx.betweenness_centrality(G, k=k, normalized=True, seed=seed)
 
 def get_harmonic_centrality(G, p=10, version="CPU_opt"):
