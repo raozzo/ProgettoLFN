@@ -2,6 +2,7 @@ import random
 from collections import deque
 import networkx as nx
 import numpy as np
+from collections import defaultdict
 
 #from datasketch import HyperLogLog
 import hashlib
@@ -27,7 +28,7 @@ def get_pagerank(G, alpha=0.85):
     return nx.pagerank(G, alpha=alpha)
 
 
-def get_clustering_coefficient(G, M=1000):
+def get_clustering_coefficient(G, M=100000):
     """
     Calculate the clustering coefficient for all nodes (i.e., the fraction of triangles around each node).
     We make use of the definition adapted for directed graphs.
@@ -43,6 +44,7 @@ def get_clustering_coefficient(G, M=1000):
 
     # Initialization
     S = [] # list of sampled edges
+    S_adj = defaultdict(set) # adjacency list for sampled edges (needed to reduce time complexity for computing N_u_S and N_v_S from O(M) to O(1))
     t = 0 # time step
     t_S = {v: 0 for v in G.nodes} # number of triangles around each node initialized to 0
     d = {v: 0 for v in G.nodes} # degree of each node initialized to 0
@@ -63,20 +65,36 @@ def get_clustering_coefficient(G, M=1000):
         d[v] += 1
 
         # Neighborhood of u intesected v contained in S
-        N_u_S = {x for (x, y) in S if y==u} | {y for (x, y) in S if x==u}
-        N_v_S = {x for (x, y) in S if y==v} | {y for (x, y) in S if x==v}
+        N_u_S = S_adj[u]
+        N_v_S = S_adj[v]
         N_uv_S = N_u_S & N_v_S
+
+        # as we are using Reservoir sampling, we need to take into account of the fact that p=M/t is changing over time
+        # so we cannot simply multiply by p^2 at the end, as the probability of each triangle to be included in S is not the same for all triangles
+        # instead, we increment the triangle counts directly considering the probability
+        # Explanation: a triangle is detected only when its third edge (u,v) arrives.
+        # At time t, this requires the first two edges to already reside in the reservoir S.
+        # The probability of a specific edge being in S at time t is p_t = M/(t-1).
+        # Thus, the probability of both previous edges being present is eta_t = (M/(t-1)) * ((M-1)/(t-2)).
+        # To maintain an unbiased estimator E[t_S] = true_triangles, we increment by the reciprocal of this probability.
+        if t > M:
+            weight = (t-1)*(t-2)/(M*(M-1))
+        else:
+            weight = 1
 
         # For each c in N_uv_S, increment triangle count for u,v,c
         for c in N_uv_S:
-            t_S[u] += 1
-            t_S[v] += 1
-            t_S[c] += 1
+            t_S[u] += weight
+            t_S[v] += weight
+            t_S[c] += weight
 
         # Reservoir sampling
 
         # CASE 1: add edge (u,v) to S if |S| < M
         if t <= M:
+            # in order to count triangles we store egdes in S_adj as they were undirected
+            S_adj[u].add(v)
+            S_adj[v].add(u)
             S.append((u,v))
 
         # CASE 2: add edge (u,v) to S with probability M/t, 
@@ -85,15 +103,29 @@ def get_clustering_coefficient(G, M=1000):
             prob = random.uniform(0,1)
             if prob <= M / t:
                 index = random.randint(0, M-1)
+
+                # remove old edge from adjacency list
+                old_u, old_v = S[index]
+                S_adj[old_u].discard(old_v)
+                S_adj[old_v].discard(old_u)
+
+                # add new edge to adjacency list
+                S_adj[u].add(v)
+                S_adj[v].add(u)
+
                 S[index] = (u,v)
 
     # Compute clustering coefficient for each node
     for v in G.nodes:
-        cc[v] = (t_S[v]) / (d[v] * (d[v] -1)) # we should not multiply by 2 (directed graph adaptation)
+        # Avoid division by zero
+        if d[v] >= 2:
+            cc[v] = (t_S[v]) / (d[v] * (d[v] -1)) # we should not multiply by 2 (directed graph adaptation)
 
-        # correction for sampling ???
-        # p = M / t
-        # cc[v] /= p**2
+            # correction for sampling ???
+            # p = M / t
+            # cc[v] /= p**2
+        else:
+            cc[v] = 0.0
 
     return cc
 
