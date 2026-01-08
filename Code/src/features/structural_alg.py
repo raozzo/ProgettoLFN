@@ -129,7 +129,6 @@ def get_clustering_coefficient(G, M=100000):
 
     return cc
 
-
 def bfs_directed(G, s, t):
     """
     Perform BFS on a directed graph from a source node.
@@ -143,50 +142,54 @@ def bfs_directed(G, s, t):
     Returns:
         dict: Dictionary {node_id: list of shortest paths from s to t}
     """
-    # Initialize structures
+
+    # Initializiation
     distance = {v: float('inf') for v in G.nodes()}
-    predecessors = {v: [] for v in G.nodes()}
-
-    distance[s] = 0
-    Q = deque([s])
-    found_target_distance = float('inf')
-
-    # BFS traversal to build predecessors map
-    # We stop exploring paths longer than the shortest path to t
-    # This ensures we only find shortest paths
-    while Q:
-        v = Q.popleft()
-
-        # If we reached the target, record the distance
-        if distance[v] >= found_target_distance:
-            continue
-
-        # Explore successors of v (outgoing edges) 
-        for w in G.successors(v):
-            # CASE 1: first time visiting w (standard BFS)
-            if distance[w] == float('inf'):
-                distance[w] = distance[v] + 1
-                predecessors[w].append(v)
-                Q.append(w)
-                if w == t:
-                    found_target_distance = distance[w]
-            # CASE 2: found another shortest path to w, which was already visited
-            elif distance[w] == distance[v] + 1:
-                predecessors[w].append(v)
+    ID = {v: 0 for v in G.nodes()} # 0 = unvisited, 1 = visited
+    preds = {v: [] for v in G.nodes()} # predecessors list to store all parents forming a SP
+    target_found_at_layer = float('inf')
     
+    # Visiting source node s
+    distance[s] = 0
+    ID[s] = 1
+    L = {0 : [s]} # list of lists L_i containing nodes at distance i from s
+    i = 0
+
+    # while (!L_i.isEmpty() and i < target_found_at_layer) do:
+    # while not(L[i].isEmpty()) and i < target_found_at_layer:
+    while i in L and L[i] and i < target_found_at_layer:
+        L[i+1] = []
+        for v in L[i]:
+            for w in G.successors(v):
+                # CASE 1: first time visiting w
+                if ID[w] == 0:
+                    distance[w] = i + 1
+                    preds[w].append(v)
+                    ID[w] = 1 # mark as visited
+                    L[i+1].append(w)
+                    if w == t:
+                        target_found_at_layer = i + 1
+                # CASE 2: found another shortest path to w (at the same shortest distance)
+                elif distance[w] == i + 1:
+                    preds[w].append(v)
+        i += 1
+
     # Reconstruct all SPs from s to t backtracking using predecessors
-    all_SPs = [] # List to store all shortest paths
+    all_SPs = [] # List to store all shortest paths from s to t
+    current_path = [t] # current path being explored
 
     # Helper function for backtracking
-    def FindPaths(v, current_path):
-        if v == s:
-            all_SPs.append(current_path[::-1])  # Append reversed path
+    def FindPaths(curr):
+        if curr == s:
+            all_SPs.append(list(reversed(current_path)))  # Append reversed path
             return
-        for pred in predecessors[v]:
-            FindPaths(pred, current_path + [pred])
-
+        for pred in preds[curr]:
+            current_path.append(pred)
+            FindPaths(pred)
+            current_path.pop()
+    
     if distance[t] != float('inf'):
-        FindPaths(t, [t])
+        FindPaths(t)
 
     return all_SPs
 
@@ -208,6 +211,7 @@ def get_approx_betweenness(G, k=10, seed=42):
     """
     # Set random seed for reproducibility and sample k nodes
     random.seed(seed)
+
     V = list(G.nodes())
     if k > len(V):
         k = len(V)
@@ -215,7 +219,12 @@ def get_approx_betweenness(G, k=10, seed=42):
     # Initialize betweenness centrality dictionary to zero
     b = {v: 0.0 for v in V}
 
-    for i in range(k):
+    # In this graph it happens many times that t is not reachable from s, 
+    # so everytime  we find out that there are no paths between s and t (up to a limit number of trials equal to 10)
+    # we resample a new (s,t) couple and do not increment the counter i
+    i = 0
+    max_trials = 0
+    while i < k:
 
         # Choose uniformly at random (s,t) from V with s != t
         """
@@ -228,8 +237,19 @@ def get_approx_betweenness(G, k=10, seed=42):
         """
         s, t = random.sample(V, 2)
 
+        # find the index of s and t in V
+        s_index = V.index(s)
+        t_index = V.index(t)
+
         # Find all shortest paths from s to all other nodes using BFS adapted for directed graphs and store them in a list P_st
         P_st = bfs_directed(G, s, t)
+        if (len(P_st) == 0):
+            print("No path found between s and t, iteration: ", i)
+            if max_trials < 10:
+                max_trials += 1
+                continue
+        print ("s = ", s_index, ", t = ", t_index, ", #SPs = ", len(P_st), ", len SP = ", max([len(p) for p in P_st]) if P_st else 0)
+        print("------------------------------")
 
         # Choose a shortest path uniformly at random from P_st
         if P_st: # Check if there are any paths
@@ -240,12 +260,13 @@ def get_approx_betweenness(G, k=10, seed=42):
                 if v != s and v != t:
                     b[v] += 1.0 / k
 
-    # Normalize the betweenness scores for directed graphs: divide by (n-1)(n-2)
-    # Multiply by n/k to scale the scores based on the number of samples ???
-    n = len(V)
-    normalization_factor = 1 / (n * (n - 1))
+        i += 1
+
+    count = 0
     for v in b:
-        b[v] *= normalization_factor
+        if b[v] > 0:
+            count += 1
+    print(f"Total nodes with non-zero betweenness: {count} out of {len(V)}")
 
     return b
     #return nx.betweenness_centrality(G, k=k, normalized=True, seed=seed)
