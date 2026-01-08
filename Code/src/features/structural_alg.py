@@ -1,7 +1,11 @@
+import platform
+import sys
 import random
 from collections import deque
 import networkx as nx
 import numpy as np
+import scipy.sparse as sp
+
 from collections import defaultdict
 
 #from datasketch import HyperLogLog
@@ -12,20 +16,148 @@ import copy
 import pandas as pd
 import gc
 
-
-def get_pagerank(G, alpha=0.85):
+def get_platform():
     """
-    Calcola il PageRank per tutti i nodi.
-
-    Args:
-        G (nx.DiGraph): Il grafo (diretto o non diretto).
-        alpha (float): Damping factor (default 0.85).
-
-    Returns:
-        dict: Dizionario {nodo_id: score_pagerank}
+    Detects hardware in use and returns (platform_name, library_to_use ).
     """
-    print(f"Calcolo PageRank su {len(G)} nodi...")
-    return nx.pagerank(G, alpha=alpha)
+    if sys.platform == "darwin" and platform.processor() == "arm":
+        try:
+            import mlx.core as mx
+            return "mlx", mx
+        except ImportError:
+            pass
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return "gpu", torch
+    except ImportError:
+        pass
+    return "cpu", np
+
+def get_pagerank (G, alpha = 0.85, tol= 1e-5, max_iter =1000):
+    '''
+    Compute PageRank Score 
+    graph is the loaded pickle file 
+    '''
+    
+    # Extract Adjacency Matrix
+    if hasattr(G, 'adjacency'):
+        node_labels = list(G.nodes())
+        # Convert to Scipy CSC matrix 
+        adj = nx.to_scipy_sparse_array(G, format='csc', dtype=np.float32)
+    else:
+        adj = G.tocsc()
+        node_labels = list(range(adj.shape))
+    
+    #number of nodes 
+    n_nodes = adj.shape[0]
+    
+    if __name__ == "__main__":
+        display(n_nodes)
+    
+    #we now can calcualate the out degree of each node (that given the adjaceny matrix 
+    # is simply the sum along colums )√
+    out_degrees = np.array(adj.sum(axis=1)).flatten()
+    is_sink = (out_degrees == 0)                 #another check if a node is a sink
+    
+    # Normalize transition probabilities: P_ij = 1 / out_degree(j) (ignoring sinks)
+    norm_out_degrees = np.where(is_sink, 1.0, out_degrees)
+    adj.data = adj.data / norm_out_degrees[np.repeat(np.arange(n_nodes), np.diff(adj.indptr))]
+    
+    platform_name, engine = get_platform()
+    
+    # PageRank uses the transpose for 'Pull' aggregation: r_next = alpha * (adj.T @ r)
+    P_matrix = adj.T.tocsc()
+    
+    #NOTE change it to mlx 
+    if platform_name == "mlx":
+        import mlx.core as mx
+        # Pre-calculate target indices using NumPy (MLX repeat doesn't support arrays yet)
+        counts = np.diff(P_matrix.indptr)
+        targets_np = np.repeat(np.arange(n_nodes), counts)
+        
+        # Move arrays to Unified Memory
+        indices = mx.array(P_matrix.indices)
+        data = mx.array(P_matrix.data)
+        targets = mx.array(targets_np)
+        sink_mask = mx.array(is_sink.astype(np.float32))
+        
+        r = mx.full((n_nodes,), 1.0 / n_nodes)
+        teleport_v = (1.0 - alpha) / n_nodes
+
+        @mx.compile
+        def update_step(r_prev):
+            # Weighted values to sum
+            weighted = data * r_prev[indices]
+            
+            # CORRECT MLX SYNTAX: Use.at.add() for parallel scatter-add
+            res = mx.zeros((n_nodes,))
+            res = res.at[targets].add(weighted)
+            
+            # Sink correction
+            sink_mass = mx.sum(r_prev * sink_mask)
+            return (alpha * (res + sink_mass / n_nodes)) + teleport_v
+
+        for i in range(max_iter):
+            r_next = update_step(r)
+            mx.eval(r_next) # Materialize the lazy graph
+            
+            if mx.sum(mx.abs(r_next - r)) < tol:
+                print(f"Converged at iteration {i}")
+                break
+            r = r_next
+    
+        r = r / mx.sum(r)
+        final_ranks = np.array(r)
+    
+    
+    elif platform_name == "gpu ":
+        import torch
+        device = torch.device("cuda")
+        P_torch = torch.sparse_csc_tensor(
+            torch.from_numpy(P_matrix.indptr).to(torch.int64),
+            torch.from_numpy(P_matrix.indices).to(torch.int64),
+            torch.from_numpy(P_matrix.data).to(torch.float32),
+            size=(n_nodes, n_nodes)
+        ).to(device)
+        
+        sinks = torch.from_numpy(is_sink).to(device)
+        pr = torch.full((n_nodes, 1), 1.0 / n_nodes, device=device)
+        teleport_v = (1.0 - alpha) / n_nodes
+
+        for i in range(max_iter):
+            #Sparse MAtrix_vect multiplication (more efficient)
+            pr_next = torch.sparse.mm(P_torch, r)
+            sink_mass = torch.sum(r[sinks])
+            pr_next = alpha * (pr_next + sink_mass / n_nodes) + teleport_v
+            
+            if torch.norm(pr_next - pr, p=1) < tol:
+                print(f"Converged at iteration {i}")
+                break
+            pr = pr_next
+        #NOTE cpu() transfer from VRAM ----> RAM     
+        final_ranks = pr.cpu().numpy().flatten()
+    
+    else:
+        #we create the pagerank vector (initialized as every node as probability 1/n)
+        pr = np.full(n_nodes, 1.0/n_nodes)
+        teleport_const = (1.0 - alpha) / n_nodes
+        for i in range(max_iter):
+            
+            pr_next = P_matrix.dot(pr)
+            sink_mass = np.sum(pr[is_sink])
+            pr_next = alpha*(pr_next +sink_mass / n_nodes)+teleport_const
+            
+            # check if maximum difference is lower than tol, if yes not much imprvement so we break
+            if np.linalg.norm(pr_next - pr,1)<tol:
+                break
+            #else we update the pagerank vector 
+            pr = pr_next
+            
+        final_ranks = pr
+        
+        
+    return dict(zip(node_labels, final_ranks))
 
 
 def get_clustering_coefficient(G, M=100000):
