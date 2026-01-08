@@ -34,7 +34,7 @@ def get_platform():
         pass
     return "cpu", np
 
-def get_pagerank (G, alpha = 0.85, tol= 1e-5, max_iter =1000):
+def get_pagerank (G, alpha = 0.85, tol= 1e-5, max_iter =1000, force_cpu = False):
     '''
     Compute PageRank Score 
     graph is the loaded pickle file 
@@ -64,7 +64,12 @@ def get_pagerank (G, alpha = 0.85, tol= 1e-5, max_iter =1000):
     norm_out_degrees = np.where(is_sink, 1.0, out_degrees)
     adj.data = adj.data / norm_out_degrees[np.repeat(np.arange(n_nodes), np.diff(adj.indptr))]
     
-    platform_name, engine = get_platform()
+    if not force_cpu: 
+        platform_name, engine = get_platform()
+    else:
+        platform_name = 'cpu'
+        print("Forcing CPU computing")
+    
     
     # PageRank uses the transpose for 'Pull' aggregation: r_next = alpha * (adj.T @ r)
     P_matrix = adj.T.tocsc()
