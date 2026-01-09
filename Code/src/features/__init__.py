@@ -1,1 +1,2 @@
 from .structural_alg import get_pagerank, get_clustering_coefficient, get_approx_betweenness, get_harmonic_centrality
+from .embeddings_alg import get_node2vec_embeddings

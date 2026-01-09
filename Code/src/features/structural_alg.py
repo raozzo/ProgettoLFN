@@ -2,19 +2,16 @@ import platform
 import sys
 import random
 from collections import deque
-import networkx as nx
-import numpy as np
-import scipy.sparse as sp
-
 from collections import defaultdict
-
-#from datasketch import HyperLogLog
 import hashlib
-#NOTE spostato cupy solo in se GPU 
 import time
 import copy
-import pandas as pd
 import gc
+
+import numpy as np
+import pandas as pd
+import networkx as nx
+import scipy.sparse as sp
 
 def get_platform():
     """
@@ -176,7 +173,6 @@ def get_pagerank (G, alpha = 0.85, tol= 1e-5, max_iter =1000, force_cpu = False)
         
         
     return dict(zip(node_labels, final_ranks))
-
 
 def get_clustering_coefficient(G, M=100000):
     """
@@ -423,24 +419,25 @@ def get_approx_betweenness(G, k=10, seed=42):
 
 def get_harmonic_centrality(G, p=10, version="CPU_opt"):
     """
-    Calcola la Harmonic Centrality approssimata usando HyperBall.
+    Computes approximate Harmonic Centrality using HyperBall.
 
-    :param G: Oggetto NetworkX DiGraph (350k nodi).
-    :param p: Precisione dei registri (p=10 -> 2^10 registri = errore ~3%).
-    :param version: Variante dell'implementazione con cui calcolare la Harmonic Centrality
-                    (Valori accettati: "CPU", "GPU").
+    Args:
+        G: NetworkX DiGraph object (350k nodes).
+        p: Register precision (p=10 -> 2^10 registers = ~3% error).
+        version: Implementation variant to use for computing Harmonic Centrality
+                    (Accepted values: "CPU", "GPU").
     """
+
     if version == "CPU":
         return harmonic_v2_CPU(G, p)
     elif version == "GPU":
-        import cupy as cp
         return harmonic_v3_GPU(G, p)
     return None
 
 def harmonic_v2_CPU(G, p=10):
 
-    # DEFINIZIONE STRUTTURE BASE PER TRATTARE IL GRAFO NETWORKX
-    print(f"--- FASE 1: Setup CPU e Hashing ---")
+    # DEFINITION OF BASIC STRUCTURES TO HANDLE NETWORKX GRAPH
+    print("CPU Setup and Hashing")
 
     G_rev = G.reverse()
     nodes = list(G_rev.nodes())
@@ -448,70 +445,69 @@ def harmonic_v2_CPU(G, p=10):
 
     m = 1 << p
     """
-    Numero di registri che compongono ciascun contatore: m = 2^p
+    Number of registers composing each counter: m = 2^p
     """
 
     node_to_idx = {node: i for i, node in enumerate(nodes)}
-    """
-    Mappatura nodo -> indice 0..N-1: dizionario del tipo (k, v) = (node, i), con i risultato dell'enumerazione dell' array di nodi
-    """
 
     edges = np.array([(node_to_idx[u], node_to_idx[v]) for u, v in G_rev.edges()], dtype=np.int32)
     """
-    Array di coppie (u_index, v_index), una per ogni edge del tipo (u, v) in G_rev
+    Array of pairs (u_index, v_index), one for each edge of type (u, v) in G_rev
     """
 
-    # DEFINIZIONE MATRICE DEI CONTATORI
+    # DEFINITION OF COUNTERS MATRIX
     M_A = np.zeros((n_nodes, m), dtype=np.uint8)
     """
-    Matrice [n_nodes x m] dei contatori;
-    Dato che un registro deve contenere il numero di leading zeroes di un hash (64 bits), il massimo valore inseribile in ciascun registro sara' < 64 (dato che i primi b bits dell' hash servono a individuare il registro corretto tra gli m), quindi 1 byte (uint8) e' sufficiente.
+    Matrix [n_nodes x m] of counters;
+    Since a register must contain the number of leading zeroes of a hash (64 bits), the maximum value we can write in 
+    each register will be < 64 (since the first b bits of the hash are used to identify the correct register among the 
+    m), so 1 byte (uint8) is sufficient.
     """
 
-    # CALCOLO DEGLI HASH
-    print("Calcolo hash iniziali su CPU...")
+    # HASH CALCULATION
+    print("Computing initial hashes on CPU...")
     for i, node in enumerate(nodes):
-        # Hash del nodo (crea hash con algoritmo md5 e trasforma il risultato in stringa hex, poi converte in intero a partire da base 16 verso base 10)
+        # Node hash (creates hash with md5 algorithm and transforms result to hex string, then converts to integer from
+        # base 16 to base 10)
         h = int(hashlib.md5(str(node).encode('utf8')).hexdigest(), 16)
 
-        # AND binario tra l' hash h e il numero m-1 = (2^10 - 1) = 1023 = sequenza di zeri seguiti da 10 valori '1'
-        # il risultato corrisponde agli ultimi 10 bit di h, che selezionano il registro in cui scrivere il numero di leading zeroes
+        # Binary AND between hash h and number m-1 = (2^10 - 1) = 1023 = sequence of zeros followed by 10 '1' values
+        # the result corresponds to the last 10 bits of h, which select the register where to write the number of
+        # leading zeroes
         j = h & (m - 1)
 
-        # Right shift per rimuovere da h gli ultimi 10 bit estratti in precedenza
+        # Right shift to remove from h the last 10 bits extracted previously
         w = h >> p
 
-        # Conteggio del numero di trailing zeroes della porzione di hash rimanente (+1)
+        # Count of trailing zeroes of the remaining hash portion (+1)
         rho = 1
-        while (w & 1) == 0 and rho < 32: # while l'ultimo bit di w è uno '0':
+        while (w & 1) == 0 and rho < 32: # while the last bit of w is a '0':
             w >>= 1
             rho += 1
         M_A[i, j] = rho
 
-    # STRUTTURE DATI HYPERBALL E PREALLOCAZIONE
+    # HYPERBALL DATA STRUCTURES AND PREALLOCATION
     M_B = M_A.copy()
     M_float = np.empty((n_nodes, m), dtype=np.float32)
-    sources = edges[:, 1] # Array monodimensionale ottenuto prendendo SOLO (tutta) la colonna 1 di edges
-    targets = edges[:, 0] # Array monodimensionale ottenuto prendendo SOLO (tutta) la colonna 0 di edges
+    sources = edges[:, 1] # 1-dimensional array obtained by taking ONLY (the whole) column 1 of edges
+    targets = edges[:, 0] # 1-dimensional array obtained by taking ONLY (the whole) column 0 of edges
 
-    # Coppia di arrays per memorizzare le cardinalità al passo t-1 e t
-    # Inizialmente ogni nodo ha cardinalità 1 (se stesso)
+    # Pair of arrays to store cardinalities at step t-1 and t
+    # Initially each node has cardinality 1 (itself)
     prev_cardinality = np.ones(n_nodes, dtype=np.float32)
     harmonic_centrality = np.zeros(n_nodes, dtype=np.float32)
 
     alpha_m = 0.7213 / (1 + 1.079 / m)
     factor = alpha_m * (m ** 2)
 
-    # PULIZIA RAM
+    # RAM CLEANING
     del G_rev, edges
     gc.collect()
 
-    print("Dati pronti. Inizio loop CPU.")
+    print("Data ready. Starting CPU loop.")
 
 
-    # -------------------------------------------------- #
-    # LOOP PRINCIPALE HYPERBALL                          #
-    # -------------------------------------------------- #
+    # MAIN HYPERBALL LOOP
     t = 0
     changed = True
 
@@ -525,33 +521,33 @@ def harmonic_v2_CPU(G, p=10):
         m_src = M_A if t % 2 == 1 else M_B
         m_target = M_B if t % 2 == 1 else M_A
 
-        # PROPAGAZIONE IN AVANTI DEI CONTATORI
+        # FORWARD PROPAGATION OF COUNTERS
         m_target[:] = m_src[:]
         if len(sources) > 0:
             np.maximum.at(m_target, targets, m_src[sources])
 
-        # Conversione in float sfruttando la memoria già allocata (M_float)
+        # Conversion to float using already allocated memory (M_float)
         np.copyto(M_float, m_target, casting='safe')
 
-        # PRIMA STIMA - MEDIA ARMONICA (in-place)
+        # FIRST ESTIMATE - HARMONIC MEAN (in-place)
         np.multiply(M_float, -1.0, out=M_float)
         np.power(2.0, M_float, out=M_float)
         sum_regs = np.sum(M_float, axis=1)
         estimate_raw = factor / sum_regs
 
-        # CORREZIONE DELLA STIMA TRAMITE LINEAR COUNTING
+        # CORRECTION OF ESTIMATE VIA LINEAR COUNTING
         estimate = estimate_raw.copy()
-        num_zeros = np.sum(m_target == 0, axis=1) # conta quanti registri sono rimasti a 0 per ciascun nodo
+        num_zeros = np.sum(m_target == 0, axis=1) # counts how many registers remained 0 for each node
         threshold = 2.5 * m
-        mask_lc = (estimate_raw <= threshold) & (num_zeros > 0) # Maschera booleana che determina quali nodi devono usare la correzione linear counting
+        mask_lc = (estimate_raw <= threshold) & (num_zeros > 0) # Boolean mask determining which nodes must use linear counting correction
 
         if np.any(mask_lc):
             # Formula: m * log(m / V)
-            # Calcoliamo solo per i nodi nella maschera
+            # We calculate only for nodes in the mask
             V = num_zeros[mask_lc].astype(np.float32)
             estimate[mask_lc] = m * np.log(m / V)
 
-        # VERIFICA MODIFICHE RISPETTO ALLA STIMA DI CARDINALITA' PRECEDENTE
+        # VERIFICATION OF CHANGES COMPARED TO PREVIOUS CARDINALITY ESTIMATE
         diff = estimate - prev_cardinality
         mask_changed = diff > 0.001
 
@@ -560,29 +556,26 @@ def harmonic_v2_CPU(G, p=10):
             harmonic_centrality[mask_changed] += diff[mask_changed] * (1.0 / t)
             prev_cardinality[mask_changed] = estimate[mask_changed]
 
-        # Print finale
+        # Final print
         elapsed = time.time() - start_time
         active_nodes = int(np.sum(mask_changed))
-        print(f"Fine t={t}. Tempo CPU: {elapsed:.4f}s. Nodi attivi: {active_nodes}")
+        print(f"End t={t}. CPU Time: {elapsed:.4f}s. Active nodes: {active_nodes}")
 
         if t > 1000:
             break
 
-    # =========================================================================
-    # FASE 4: RECUPERO RISULTATI
-    # =========================================================================
-    print("Calcolo finito. Restituzione dati...")
+    # RESULT RETRIEVAL
+    print("Calculation finished. Returning data...")
     return pd.DataFrame({
         'ASIN': nodes,
         'HarmonicCentrality': harmonic_centrality
     })
 
-
 def harmonic_v3_GPU(G, p=10):
-    # =========================================================================
-    # FASE 1: SETUP SU CPU
-    # =========================================================================
-    print(f"--- FASE 1: Setup CPU e Hashing ---")
+    import cupy as cp
+
+    # CPU SETUP
+    print("CPU Setup and Hashing")
 
     G_rev = G.reverse()
     nodes = list(G_rev.nodes())
@@ -590,65 +583,64 @@ def harmonic_v3_GPU(G, p=10):
 
     m = 1 << p
     """
-    Numero di registri che compongono ciascun contatore: m = 2^p
+    Number of registers composing each counter: m = 2^p
     """
 
     node_to_idx = {node: i for i, node in enumerate(nodes)}
-    """
-    Mappatura nodo -> indice 0..N-1: dizionario del tipo (k, v) = (node, i), con i risultato dell'enumerazione dell' array di nodi
-    """
 
     edges = np.array([(node_to_idx[u], node_to_idx[v]) for u, v in G_rev.edges()], dtype=np.int32)
     """
-    Array di coppie (u_index, v_index), una per ogni edge del tipo (u, v) in G_rev
+    Array of pairs (u_index, v_index), one for each edge of type (u, v) in G_rev
     """
 
     M_cpu = np.zeros((n_nodes, m), dtype=np.int32)
     """
-    Matrice [n_nodes x m] dei contatori;
-    Dato che un registro deve contenere il numero di leading zeroes di un hash (64 bits), il massimo valore inseribile in ciascun registro sara' < 64 (dato che i primi b bits dell' hash servono a individuare il registro corretto tra gli m), quindi 1 byte (uint8) e' sufficiente.
+    Matrix [n_nodes x m] of counters;
+    Since a register must contain the number of leading zeroes of a hash (64 bits), the maximum value insertable 
+    in each register will be < 64 (since the first b bits of the hash are used to identify the correct register among 
+    the m), so 1 byte (uint8) is sufficient.
     """
 
-    print("Calcolo hash iniziali su CPU...")
+    print("Calculating initial hashes on CPU...")
 
-    # Pre-calcolo hash per ogni nodo per inizializzare M
+    # Pre-calculation of hash for each node to initialize M
     for i, node in enumerate(nodes):
-        # Hash del nodo (crea hash con algoritmo md5 e trasforma il risultato in stringa hex, poi converte in intero a partire da base 16 verso base 10)
+        # Node hash (creates hash with md5 algorithm and transforms result to hex string, then converts to integer
+        # from base 16 to base 10)
         h = int(hashlib.md5(str(node).encode('utf8')).hexdigest(), 16)
 
-        # AND binario tra l' hash h e il numero m-1 = (2^10 - 1) = 1023 = sequenza di zeri seguiti da 10 valori '1'
-        # il risultato corrisponde agli ultimi 10 bit di h, che selezionano il registro in cui scrivere il numero di leading zeroes
+        # Binary AND between hash h and number m-1 = (2^10 - 1) = 1023 = sequence of zeros followed by 10 '1' values
+        # the result corresponds to the last 10 bits of h, which select the register where to write the number of
+        # leading zeroes
         j = h & (m - 1)
 
-        # Right shift per rimuovere da h gli ultimi 10 bit estratti in precedenza
+        # Right shift to remove from h the last 10 bits extracted previously
         w = h >> p
 
-        # Conteggio del numero di trailing zeroes della porzione di hash rimanente (+1)
+        # Count of trailing zeroes of the remaining hash portion (+1)
         rho = 1
-        while (w & 1) == 0 and rho < 32: # while l'ultimo bit di w è uno '0':
+        while (w & 1) == 0 and rho < 32: # while the last bit of w is a '0':
             w >>= 1
             rho += 1
         M_cpu[i, j] = rho
 
-    # =========================================================================
-    # FASE 2: TRASFERIMENTO SU GPU
-    # =========================================================================
-    print(f"--- FASE 2: Spostamento dati su GPU, pre-allocazione ---")
-    M_A = cp.asarray(M_cpu)         # Matrice corrente
-    M_B = M_A.copy()                # Matrice per il prossimo passo (Double Buffering)
-    M_float = cp.empty_like(M_A, dtype=cp.float32) # Buffer per i calcoli float
+    # TRANSFER TO GPU
+    print(f"Moving data to GPU, pre-allocation")
+    M_A = cp.asarray(M_cpu)         # Current matrix
+    M_B = M_A.copy()                # Matrix for the next step (Double Buffering)
+    M_float = cp.empty_like(M_A, dtype=cp.float32) # Buffer for float calculations
 
     if len(edges) > 0:
         sources_gpu = cp.asarray(edges[:, 1])
-        """ Array monodimensionale ottenuto prendendo SOLO (tutta) la colonna 1 di edges """
+        """ 1-dimensional array obtained by taking ONLY (the whole) column 1 of edges """
         targets_gpu = cp.asarray(edges[:, 0])
-        """ Array monodimensionale ottenuto prendendo SOLO (tutta) la colonna 0 di edges """
+        """ 1-dimensional array obtained by taking ONLY (the whole) column 0 of edges """
     else:
         sources_gpu = cp.array([], dtype=cp.int32)
         targets_gpu = cp.array([], dtype=cp.int32)
 
-    # Coppia di arrays per memorizzare le cardinalità al passo t-1 e t
-    # Inizialmente ogni nodo ha cardinalità 1 (se stesso)
+    # Pair of arrays to store cardinalities at step t-1 and t
+    # Initially each node has cardinality 1 (itself)
     prev_cardinality_gpu = cp.ones(n_nodes, dtype=cp.float32)
     harmonic_centrality_gpu = cp.zeros(n_nodes, dtype=cp.float32)
 
@@ -658,10 +650,10 @@ def harmonic_v3_GPU(G, p=10):
     del M_cpu, edges
     gc.collect()
 
-    print(f"Dati pronti. VRAM inizialmente impegnata: ~{((M_A.nbytes * 3) / 1024**2):.2f} MB")
+    print(f"Data ready. VRAM initially committed: ~{((M_A.nbytes * 3) / 1024**2):.2f} MB")
 
     # =========================================================================
-    # FASE 3: LOOP PRINCIPALE SU GPU
+    # PHASE 3: MAIN GPU LOOP
     # =========================================================================
     t = 0
     changed = True
@@ -679,37 +671,38 @@ def harmonic_v3_GPU(G, p=10):
         m_target = M_B if t % 2 == 1 else M_A
 
 
-        # PROPAGAZIONE IN AVANTI DEI CONTATORI
-        # se il numero di archi e' > 0, calcola il massimo tra il registro del nodo sorgente e i registri dei nodi target
+        # FORWARD PROPAGATION OF COUNTERS
+        # if the number of edges is > 0, calculate the maximum between the source node register and the target
+        # node registers
         m_target[:] = m_src[:]
         if len(sources_gpu) > 0:
-            # Aggiorna i nodi target con il massimo
+            # Update target nodes with the maximum
             cp.maximum.at(m_target, targets_gpu, m_src[sources_gpu])
 
-        # CONVERSIONI DELLA MATRICE DEI CONTATORI
+        # COUNTERS MATRIX CONVERSIONS
         M_float[:] = m_target.astype(cp.float32)
 
-        # PRIMA STIMA - MEDIA ARMONICA
+        # FIRST ESTIMATE - HARMONIC MEAN
         cp.multiply(M_float, -1.0, out=M_float)
         cp.exp2(M_float, out=M_float)
         sum_regs = cp.sum(M_float, axis=1)
         estimate_raw = factor / sum_regs
 
-        # CORREZIONE DELLA STIMA TRAMITE LINEAR COUNTING
-        num_zeros = cp.sum(m_target == 0, axis=1) # conta quanti registri sono rimasti a 0 per ciascun nodo (dato che True e' considerato 1)
+        # CORRECTION OF ESTIMATE VIA LINEAR COUNTING
+        num_zeros = cp.sum(m_target == 0, axis=1) # counts how many registers remained 0 for each node (since True is considered 1)
         estimate = estimate_raw.copy()
 
         threshold = 2.5 * m
-        # Maschera booleana che determina quali nodi devono usare la correzione linear counting. un elemento del vettore e' true solo se entrambe le condizioni sono verificate (AND bitwise)
+        # Boolean mask determining which nodes must use linear counting correction. An element of the vector is true only if both conditions are verified (bitwise AND)
         mask_lc = (estimate_raw <= threshold) & (num_zeros > 0)
 
         if cp.any(mask_lc):
             # Formula: m * log(m / V)
-            # Calcoliamo solo per i nodi nella maschera
+            # We calculate only for nodes in the mask
             V = num_zeros[mask_lc].astype(cp.float32)
             estimate[mask_lc] = m * cp.log(m / V)
 
-        # VERIFICA MODIFICHE RISPETTO ALLA STIMA DI CARDINALITA' PRECEDENTE
+        # VERIFICATION OF CHANGES COMPARED TO PREVIOUS CARDINALITY ESTIMATE
         diff = estimate - prev_cardinality_gpu
         mask_changed = diff > 0.001
 
@@ -723,15 +716,13 @@ def harmonic_v3_GPU(G, p=10):
         elapsed = time.time() - start_time
 
         active_nodes = int(cp.sum(mask_changed))
-        print(f"Fine t={t}. Tempo GPU: {elapsed:.4f}s. Nodi attivi: {active_nodes}")
+        print(f"End t={t}. GPU Time: {elapsed:.4f}s. Active nodes: {active_nodes}")
 
         if t > 1000:
             break
 
-    # =========================================================================
-    # FASE 4: RECUPERO RISULTATI
-    # =========================================================================
-    print("Calcolo terminato. Recupero dati dalla GPU...")
+    # RESULT RETRIEVAL
+    print("Calculation finished. Retrieving data from GPU...")
     return pd.DataFrame({
         'ASIN': nodes,
         'HarmonicCentrality': harmonic_centrality_gpu.get()
