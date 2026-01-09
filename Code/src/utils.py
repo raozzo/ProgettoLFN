@@ -41,7 +41,7 @@ def load_or_compute(file_path, compute_func, force_recompute=False, **kwargs):
     result = compute_func(**kwargs)
     
     # 3. Save the result
-    print(f"💾 Saving to {file_path}...")
+    print(f"Saving to {file_path}...")
     
     # If result is a dict (like your scores), convert to DataFrame first for CSVs
     if file_path.endswith('.csv'):
