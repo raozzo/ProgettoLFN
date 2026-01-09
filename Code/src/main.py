@@ -4,6 +4,9 @@ import features
 
 if __name__ == "__main__":
 
+    # Graph preprocessing
+
+
     # Graph retrieval
     graph_path = "../data/processed/amazon_graph.pickle"
     with open(graph_path, "rb") as f:
@@ -16,6 +19,9 @@ if __name__ == "__main__":
     #clustering_coefficient_df = features.get_clustering_coefficient(G)
 
     # Embeddings
+    embeddings_df = features.get_node2vec_embeddings(G, version="GPU")
+
+    # Hybrid features vector
 
     # Clustering
 
