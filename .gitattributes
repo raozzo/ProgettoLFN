@@ -1,3 +1,5 @@
 Code/data/amazon-meta.txt filter=lfs diff=lfs merge=lfs -text
 Code/data/amazon-meta.txt.gz filter=lfs diff=lfs merge=lfs -text
 Code/data/processed/embeddings.csv filter=lfs diff=lfs merge=lfs -text
+Code/data/processed/embeddings_p1_q1.csv filter=lfs diff=lfs merge=lfs -text
+Code/data/processed/embeddings_p1_q2.csv filter=lfs diff=lfs merge=lfs -text
