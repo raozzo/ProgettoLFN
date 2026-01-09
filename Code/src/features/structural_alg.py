@@ -18,7 +18,7 @@ import gc
 
 def get_platform():
     """
-    Detects hardware in use and returns (platform_name, library_to_use ).
+    Detects hardware in use and returns (platform_name, library_to_use).
     """
     if sys.platform == "darwin" and platform.processor() == "arm":
         try:
@@ -36,8 +36,20 @@ def get_platform():
 
 def get_pagerank (G, alpha = 0.85, tol= 1e-5, max_iter =1000, force_cpu = False):
     '''
-    Compute PageRank Score 
-    graph is the loaded pickle file 
+    Compute PageRank Score usign Power iteration method
+
+    Args:  
+        G           is the loaded largest connected component of the graph (loaded pickle file)
+        alpha       (dumping factor)the probability that a random surfer continues clicking on links rather than jumping to a random page
+        tol         (tolerance) determines when the iterative calculation stops (how little the new score vector should change from the 
+                    previus computation to determine we have a solution)
+        max_iter    maximum number of iteration (default = 1000)
+        force_cpu   is a flag to force computation on cpu ignoring platform (ignore mlx or gpu)
+    
+    Returns:
+        a standard Python dictionary where:
+        - Keys (node_labels): node identifiers  (ASIN strings like '0827229534')
+        - Values (final_ranks): the computed PageRank scores (floats)
     '''
     
     # Extract Adjacency Matrix
@@ -66,6 +78,7 @@ def get_pagerank (G, alpha = 0.85, tol= 1e-5, max_iter =1000, force_cpu = False)
     
     if not force_cpu: 
         platform_name, engine = get_platform()
+        print(platform_name)
     else:
         platform_name = 'cpu'
         print("Forcing CPU computing")
