@@ -3,10 +3,11 @@ Code/data/review_scores.csv
 __pycache__/
 Code/.DS_Store
 .DS_Store
-.DS_Store
 Code/data/processed/bet_scores.csv
 Code/data/processed/clus_scores.csv
 Code/data/processed/harm_scores.csv
+Code/data/processed/harm_scores_cpu.csv
+Code/data/processed/harm_scores_gpu.csv
 Code/data/processed/mypagerank_gmrs_scores.csv
 Code/data/processed/mypagerank_scores.csv
 Code/data/processed/pagerank_scores.csv
