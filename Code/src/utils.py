@@ -2,6 +2,38 @@ import os
 import pandas as pd
 import pickle
 
+from datetime import datetime
+
+TIME_FILE = "../data/times_log.csv"
+
+
+def log_times(funt_name, duration_sec, params):
+    """
+    Append to CSV (or create it if not existant) where the entries are the timestamp, function name, function and function args
+    The timestamp is probably not necessary but it's for now a way to not overlap logs made in different computer
+
+    Returns:
+        Times logged in a csv file (TIME_FILE)
+    
+    """
+
+    entry = {
+        'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        'function': func_name,
+        'operation': operation_type, # 'Computed' or 'Loaded'
+        'duration_sec': round(duration_sec, 4),
+        'parameters': str(params) # Save kwargs as string
+    }
+
+    df_entry= pd.DataFrame([entry])
+
+    if not os.path.exists(TIME_FILE):
+        df_entry.to_csv(TIME_FILE, index=False)
+    else:
+        df_entry.to_csv(TIME_FILE, mode='a', header=False, index=False)
+
+
+
 def load_or_compute(file_path, compute_func, force_recompute=False, **kwargs):
     """
     Checks if a file exists. 
@@ -36,12 +68,18 @@ def load_or_compute(file_path, compute_func, force_recompute=False, **kwargs):
         else:
             raise ValueError("Unsupported file extension. Use .csv or .pickle")
 
-    # 2. If we are here, we need to COMPUTE
+    # If we are here, we need to COMPUTE
     print("Computing")
-    result = compute_func(**kwargs)
+    start_time = time.time()
     
-    # 3. Save the result
-    print(f"Saving to {file_path}...")
+    result = compute_func(**kwargs)
+    duration = time.time() - start_time
+    
+    #NOTE: for now on pagerak there is no method to save platform
+    log_performance(compute_func.__name__, duration, kwargs)
+    
+    # Save the result
+    print("Saving to {file_path}...")
     
     # If result is a dict (like your scores), convert to DataFrame first for CSVs
     if file_path.endswith('.csv'):
