@@ -8,7 +8,7 @@ from datetime import datetime
 TIME_FILE = "../data/times_log.csv"
 
 
-def log_times(funt_name, duration_sec, params):
+def log_times(func_name, duration_sec, params):
     """
     Append to CSV (or create it if not existant) where the entries are the timestamp, function name, function and function args
     The timestamp is probably not necessary but it's for now a way to not overlap logs made in different computer
@@ -20,8 +20,6 @@ def log_times(funt_name, duration_sec, params):
 
     entry = {
         'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        'function': func_name,
-        'operation': operation_type, # 'Computed' or 'Loaded'
         'duration_sec': round(duration_sec, 4),
         'parameters': str(params) # Save kwargs as string
     }
@@ -77,7 +75,7 @@ def load_or_compute(file_path, compute_func, force_recompute=False, **kwargs):
     duration = time.time() - start_time
     
     #NOTE: for now on pagerak there is no method to save platform
-    log_performance(compute_func.__name__, duration, kwargs)
+    log_times(compute_func.__name__, duration, kwargs)
     
     # Save the result
     print("Saving to {file_path}...")
