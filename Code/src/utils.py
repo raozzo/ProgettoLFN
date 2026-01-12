@@ -20,8 +20,10 @@ def log_times(func_name, duration_sec, params):
 
     entry = {
         'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        'function': func_name,
         'duration_sec': round(duration_sec, 4),
-        'parameters': str(params) # Save kwargs as string
+         # Save kwargs as string
+        'parameters': str(params)
     }
 
     df_entry= pd.DataFrame([entry])
