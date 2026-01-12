@@ -4,8 +4,10 @@ import pickle
 
 import time
 from datetime import datetime
+import time
 
 TIME_FILE = "../data/times_log.csv"
+RESULTS_FILE = "../data/results/clustering_results.csv"
 
 
 def log_times(func_name, duration_sec, params):
@@ -102,3 +104,24 @@ def load_or_compute(file_path, compute_func, force_recompute=False, **kwargs):
             pickle.dump(result, f)
             
     return result
+
+def log_clustering_results(method_name, nmi, ari):
+    """
+    Save clustering evaluation results to a CSV file.
+    Args:
+        method_name (str): Name of the clustering method.
+        nmi (float): Normalized Mutual Information score.
+        ari (float): Adjusted Rand Index score.
+    """
+    new_entry = pd.DataFrame([{
+        'method': method_name, 
+        'NMI': round(nmi, 4), 
+        'ARI': round(ari, 4)
+    }])
+
+    if not os.path.exists(RESULTS_FILE):
+        new_entry.to_csv(RESULTS_FILE, index=False)
+    else:
+        new_entry.to_csv(RESULTS_FILE, mode='a', header=False, index=False)
+
+    print(f"Clustering results for {method_name} saved corrctly.")
