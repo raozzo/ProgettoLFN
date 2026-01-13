@@ -3,7 +3,7 @@ import time
 import pandas as pd
 import networkx as nx
 
-def get_node2vec_embeddings(G, version = 'GPU', embedding_dim=128,
+def get_node2vec_embeddings(G, version = 'cuda', embedding_dim=128,
                             walk_length=80, context_size=10, walks_per_node=10, p=1, q=2,
                             epochs_GPU=100, patience_GPU=3, batch_size_GPU=128):
 
@@ -13,7 +13,7 @@ def get_node2vec_embeddings(G, version = 'GPU', embedding_dim=128,
 
     Args:
         G (nx.Graph): Input NetworkX graph.
-        version (str): Version of the Node2Vec algorithm to use ('CPU' or 'GPU').
+        version (str): Version of the Node2Vec algorithm to use ('cpu' or 'cuda').
         embedding_dim (int): Dimension of the output embedding vectors.
         walk_length (int): Length of each random walk.
         context_size (int): Window size for the skip-gram model.
@@ -29,10 +29,10 @@ def get_node2vec_embeddings(G, version = 'GPU', embedding_dim=128,
                       corresponding embedding vectors.
     """
 
-    if version == 'CPU':
+    if version == 'cpu':
         return get_node2vec_emb_CPU(G, embedding_dim=embedding_dim, walk_length=walk_length, window = context_size,
                                     walks_per_node=walks_per_node, p=p, q=q)
-    elif version == 'GPU':
+    elif version == 'cuda':
         return get_node2vec_emb_GPU(G, embedding_dim=embedding_dim, walk_length=walk_length, context_size=context_size,
                                     walks_per_node=walks_per_node, p=p, q=q, epochs=epochs_GPU, patience=patience_GPU,
                                     batch_size=batch_size_GPU)

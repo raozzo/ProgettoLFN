@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import pickle
-
+from pathlib import Path
 import time
 from datetime import datetime
 import time
@@ -44,7 +44,7 @@ def load_or_compute(file_path, compute_func, force_recompute=False, **kwargs):
     - If it doesn't exist (or force_recompute is True): runs compute_func, saves the result, and returns it.
     
     Args:
-        file_path (str): Path to save/load the file (e.g., 'data/processed/pagerank.csv').
+        file_path (Path): Path to save/load the file (e.g., 'data/processed/pagerank.csv').
         compute_func (callable): The function to run if data is missing (e.g., get_pagerank).
         force_recompute (bool): If True, ignores existing file and re-runs computation.
         **kwargs: Arguments to pass to compute_func (e.g., G=G_loaded, alpha=0.85).
@@ -52,19 +52,18 @@ def load_or_compute(file_path, compute_func, force_recompute=False, **kwargs):
     Returns:
         The data (DataFrame, dict, or whatever compute_func returns).
     """
-    
-    #if the file exists i load it 
 
-    if os.path.exists(file_path) and not force_recompute:
+    if file_path.exists() and not force_recompute:
         print("File found.")
-        
-        # Handle CSVs 
-        if file_path.endswith('.csv'):
+        ext = file_path.suffix.lower()
+
+        # Handle CSVs
+        if ext == '.csv':
             # Assume first column is index (ASIN)
             return pd.read_csv(file_path, index_col=0)
             
         # Handle Pickles 
-        elif file_path.endswith('.pickle') or file_path.endswith('.pkl'):
+        elif ext in {".pickle", ".pkl"}:
             with open(file_path, 'rb') as f:
                 return pickle.load(f)
                 
@@ -82,14 +81,15 @@ def load_or_compute(file_path, compute_func, force_recompute=False, **kwargs):
     log_times(compute_func.__name__, duration, kwargs)
     
     # Save the result
-    print("Saving to {file_path}...")
-    
+    print(f"Saving to {file_path}...")
+    ext = file_path.suffix.lower()
+
     # If result is a dict (like your scores), convert to DataFrame first for CSVs
-    if file_path.endswith('.csv'):
+    if ext == ".csv":
         if isinstance(result, dict):
             # Convert {ASIN: score} dict to DataFrame
             # infer column name from filename (e.g. pagerank_scores.csv -> PageRank)
-            col_name = os.path.basename(file_path).replace('_scores.csv', '').replace('.csv', '')
+            col_name = file_path.stem.replace("_scores", "")
             df = pd.DataFrame.from_dict(result, orient='index', columns=[col_name])
             df.index.name = 'ASIN'
             df.to_csv(file_path)
@@ -99,11 +99,13 @@ def load_or_compute(file_path, compute_func, force_recompute=False, **kwargs):
             return result
             
     # For Pickles
-    elif file_path.endswith('.pickle') or file_path.endswith('.pkl'):
-        with open(file_path, 'wb') as f:
+    elif ext in {".pickle", ".pkl"}:
+        with file_path.open("wb") as f:
             pickle.dump(result, f)
-            
-    return result
+        return result
+
+    else:
+        raise ValueError("Unsupported file extension. Use .csv or .pickle/.pkl")
 
 def log_clustering_results(method_name, nmi, ari):
     """

@@ -417,7 +417,7 @@ def get_approx_betweenness(G, k=10, seed=42):
     return b
     #return nx.betweenness_centrality(G, k=k, normalized=True, seed=seed)
 
-def get_harmonic_centrality(G, p=10, version="CPU_opt"):
+def get_harmonic_centrality(G, p=10, version="cuda"):
     """
     Computes approximate Harmonic Centrality using HyperBall.
 
@@ -425,12 +425,12 @@ def get_harmonic_centrality(G, p=10, version="CPU_opt"):
         G: NetworkX DiGraph object (350k nodes).
         p: Register precision (p=10 -> 2^10 registers = ~3% error).
         version: Implementation variant to use for computing Harmonic Centrality
-                    (Accepted values: "CPU", "GPU").
+                    (Accepted values: "cpu", "cuda").
     """
 
-    if version == "CPU":
+    if version == "cpu":
         return harmonic_CPU(G, p)
-    elif version == "GPU":
+    elif version == "cuda":
         return harmonic_GPU(G, p)
     return None
 
