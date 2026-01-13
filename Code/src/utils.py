@@ -107,23 +107,21 @@ def load_or_compute(file_path, compute_func, force_recompute=False, **kwargs):
     else:
         raise ValueError("Unsupported file extension. Use .csv or .pickle/.pkl")
 
-def log_clustering_results(method_name, nmi, ari):
+def log_clustering_results(method_name, nmi, overwrite=False):
     """
     Save clustering evaluation results to a CSV file.
     Args:
         method_name (str): Name of the clustering method.
         nmi (float): Normalized Mutual Information score.
-        ari (float): Adjusted Rand Index score.
     """
     new_entry = pd.DataFrame([{
         'method': method_name, 
-        'NMI': round(nmi, 4), 
-        'ARI': round(ari, 4)
+        'NMI': round(nmi, 4)
     }])
 
-    if not os.path.exists(RESULTS_FILE):
-        new_entry.to_csv(RESULTS_FILE, index=False)
+    if overwrite or not os.path.exists(RESULTS_FILE):
+        new_entry.to_csv(RESULTS_FILE, mode='w', index=False, header=True)
     else:
-        new_entry.to_csv(RESULTS_FILE, mode='a', header=False, index=False)
+        new_entry.to_csv(RESULTS_FILE, mode='a', index=False, header=False)
 
-    print(f"Clustering results for {method_name} saved corrctly.")
+    print(f"Clustering results for {method_name} saved correctly.")

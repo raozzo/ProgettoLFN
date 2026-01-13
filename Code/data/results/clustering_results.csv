@@ -1,4 +1,4 @@
 method,NMI
-Structural + Salesrank,0.0098
-Learned (Embeddings),0.0829
-Hybrid (Balanced),0.0098
+Structural,0.1394
+Learned (Embeddings),0.0746
+Hybrid,0.0227
