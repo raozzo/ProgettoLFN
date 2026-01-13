@@ -102,12 +102,13 @@ def get_pagerank (G, alpha = 0.85, tol= 1e-5, max_iter =1000, force_cpu = False)
 
         @mx.compile
         def update_step(r_prev):
+            source_ranks = r_prev[targets]
             # Weighted values to sum
-            weighted = data * r_prev[indices]
+            weighted = data * source_ranks
             
             # CORRECT MLX SYNTAX: Use.at.add() for parallel scatter-add
             res = mx.zeros((n_nodes,))
-            res = res.at[targets].add(weighted)
+            res = res.at[indices].add(weighted)
             
             # Sink correction
             sink_mass = mx.sum(r_prev * sink_mask)
@@ -115,7 +116,7 @@ def get_pagerank (G, alpha = 0.85, tol= 1e-5, max_iter =1000, force_cpu = False)
 
         for i in range(max_iter):
             r_next = update_step(r)
-            mx.eval(r_next) # Materialize the lazy graph
+            mx.eval(r_next) 
             
             if mx.sum(mx.abs(r_next - r)) < tol:
                 print(f"Converged at iteration {i}")
