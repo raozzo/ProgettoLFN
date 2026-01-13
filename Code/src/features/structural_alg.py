@@ -174,7 +174,7 @@ def get_pagerank (G, alpha = 0.85, tol= 1e-5, max_iter =1000, force_cpu = False)
         
     return dict(zip(node_labels, final_ranks))
 
-def get_clustering_coefficient(G, M=100000):
+def get_clustering_coefficient(G, M=100000, use_networkx=False):
     """
     Calculate the clustering coefficient for all nodes (i.e., the fraction of triangles around each node).
     We make use of the definition adapted for directed graphs.
@@ -183,10 +183,14 @@ def get_clustering_coefficient(G, M=100000):
     Args:
         G (nx.DiGraph): The directed graph.
         M (int): edge memory size.
+        use_networkx (bool): if True use NetworkX function. Default False (hand-made version). 
 
     Returns:
         dict: Dictionary {node_id: clustering_coefficient}
     """
+
+    if use_networkx:
+        return nx.clustering(G, weight=None)
 
     # Initialization
     S = [] # list of sampled edges
@@ -339,10 +343,7 @@ def bfs_directed(G, s, t):
 
     return all_SPs
 
-# PROBLEM: In the slides the professor says that we should sample k couples (s,t) from VxV with s != t and then find all shortest paths between them.
-# In NewtorkX implementation instead, they sample k source nodes and compute shortest paths from each of them to all other nodes.
-# => to understand if we prefer to stick to the slides or to NetworkX implementation.
-def get_approx_betweenness(G, k=10, seed=42):
+def get_approx_betweenness(G, k=10, seed=42, use_networkx=False):
     """
     Calculate the approximate betweenness centrality for all nodes using sampling.
     Implementation of Brande's algorithm adapted for directed graphs
@@ -351,10 +352,14 @@ def get_approx_betweenness(G, k=10, seed=42):
         G (nx.DiGraph): The directed graph.
         k (int): Number of samples for approximation.
         seed (int): Random seed for reproducibility.
+        use_networkx (bool): if True use NetworkX function. Default False (hand-made version).
 
     Returns:
         dict: Dictionary {node_id: approximate_betweenness_score}
     """
+    if use_networkx:
+        return nx.betweenness_centrality(G, k=k, seed=seed, normalized=True)
+
     # Set random seed for reproducibility and sample k nodes
     random.seed(seed)
 
@@ -415,7 +420,6 @@ def get_approx_betweenness(G, k=10, seed=42):
     print(f"Total nodes with non-zero betweenness: {count} out of {len(V)}")
 
     return b
-    #return nx.betweenness_centrality(G, k=k, normalized=True, seed=seed)
 
 def get_harmonic_centrality(G, p=10, version="cuda"):
     """
