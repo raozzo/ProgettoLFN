@@ -73,6 +73,8 @@ def get_pagerank (G, alpha = 0.85, tol= 1e-5, max_iter =1000, force_cpu = False)
     norm_out_degrees = np.where(is_sink, 1.0, out_degrees)
     adj.data = adj.data / norm_out_degrees[np.repeat(np.arange(n_nodes), np.diff(adj.indptr))]
     
+    P_matrix = adj.T.tocsc()
+    
     if not force_cpu: 
         platform_name, engine = get_platform()
         print(platform_name)
@@ -80,13 +82,8 @@ def get_pagerank (G, alpha = 0.85, tol= 1e-5, max_iter =1000, force_cpu = False)
         platform_name = 'cpu'
         print("Forcing CPU computing")
     
-    
-    # PageRank uses the transpose for 'Pull' aggregation: r_next = alpha * (adj.T @ r)
-    P_matrix = adj.T.tocsc()
-    
     if platform_name == "mlx":
         import mlx.core as mx
-        # Pre-calculate target indices using NumPy (MLX repeat doesn't support arrays yet)
         counts = np.diff(P_matrix.indptr)
         targets_np = np.repeat(np.arange(n_nodes), counts)
         
