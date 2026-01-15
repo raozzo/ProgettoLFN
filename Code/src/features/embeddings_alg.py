@@ -220,7 +220,7 @@ def get_node2vec_emb_GPU(G, embedding_dim=128,
     return df
 
 
-def apply_umap(df_embeddings, n_components=10, n_neighbors=30, min_dist=0.0):
+def apply_umap(df_embeddings, n_components=10, n_neighbors=30, min_dist=0.0, umap_metric = 'euclidean'):
 
     print(f"Starting UMAP reduction on {len(df_embeddings)} nodes...")
     print(f"Reduction from {df_embeddings.shape[1] - 1} to {n_components} dimensions.")
@@ -237,7 +237,7 @@ def apply_umap(df_embeddings, n_components=10, n_neighbors=30, min_dist=0.0):
         n_components=n_components,
         n_neighbors=n_neighbors,
         min_dist=min_dist,
-        metric='cosine',
+        metric= umap_metric,
         low_memory=False,
         random_state=42,
         verbose=True
