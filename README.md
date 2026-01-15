@@ -25,19 +25,19 @@
 
 This project explores and compares structural, learned (embeddings), and hybrid feature representations for clustering a graph based on the Amazon product dataset.
 
-## 🚀 Guide through the Structure of the Project
+## Guide through the Structure of the Project
 
 To get a comprehensive overview of the final results and the comparative analysis, start with the main notebook.
 
 ### 1. General Results and Comparative Analysis
 All comparisons between representations (Structural, Learned, Hybrid), confusion matrices, and evaluation metrics can be found here:
-* 📊 **[`/Code/notebooks/print.ipynb`](./Code/notebooks/print.ipynb)**: The main project report and final interactive dashboard.
+* **[`/Code/notebooks/print.ipynb`](./Code/notebooks/print.ipynb)**: The main project report and final interactive dashboard.
 
 ---
 
-### 2. Handmade Implementations
+### 2. Our Implementations
 The primary graph centrality metrics were implemented manually to study their algorithmic behavior. The source code is located in:
-* 🛠️ **[`/Code/src/features/`](./Code/src/features/)**: Contains manual implementations of the structural features.
+* **[`/Code/src/features/`](./Code/src/features/)**: Contains manual implementations of the structural features.
 
 Detailed tests and step-by-step results for these implementations are documented in their dedicated notebooks:
 * [Betweenness Centrality](./Code/notebooks/betweenness_centrality.ipynb)
@@ -57,6 +57,7 @@ Detailed tests and step-by-step results for these implementations are documented
 Data generated throughout the different project phases is organized as follows:
 * **Computed Features**: [`/Code/data/processed/`](./Code/data/processed/) (CSV files for the various centrality scores).
 * **Clustering Results**: [`/Code/data/processed/results/`](./Code/data/processed/results/) (Model outputs and evaluation metrics).
+* **Original Dataset**: [`/Code/data/`](./Code/data/) (amazon-meta dataset both compressed and uncompressed - This file were loaded trough Git-LFN ).
 
 The data handling is managed by:
 * **[`graph_processing.py`](./Code/src/graph_processing.py)**: Script dedicated to loading and cleaning the original Amazon metadata graph.

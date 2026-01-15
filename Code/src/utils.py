@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 import time
 
-TIME_FILE = "../data/times_log.csv"
+TIME_FILE = "../data/results/times_log.csv"
 RESULTS_FILE = "../data/results/clustering_results.csv"
 
 

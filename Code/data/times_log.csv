@@ -1,4 +1,0 @@
-timestamp,function,duration_sec,parameters
-2026-01-12 15:31:34,get_pagerank,4.1863,"{'G': <networkx.classes.digraph.DiGraph object at 0x7fa241c1fac0>, 'force_cpu': False}"
-2026-01-12 15:47:17,get_approx_betweenness,941.613,"{'G': <networkx.classes.digraph.DiGraph object at 0x7fa241c1fac0>, 'k': 1000}"
-2026-01-12 15:47:23,get_clustering_coefficient,5.5304,{'G': <networkx.classes.digraph.DiGraph object at 0x7fa241c1fac0>}
