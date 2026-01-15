@@ -1,32 +1,13 @@
 import os
 import pickle
 import re
-import sys
-
 import networkx as nx
-import pandas as pd
 
-# --- CONFIGURAZIONE ---
-# Percorsi
-RAW_DATA_PATH = "../data/amazon-meta.txt"
-# Modificato: usiamo l'estensione standard .pickle
-OUTPUT_PATH = "../data/processed/amazon_graph.pickle"
-
-# Creiamo la cartella di output se non esiste
-os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-
-# Gruppi da mantenere (come da proposta)
-TARGET_GROUPS = {"Book", "DVD", "Video", "Music"}
-
-print("Configurazione completata. Output sarà: ", OUTPUT_PATH)
-
-
-# --- FUNZIONE DI PARSING ---
-def parse_amazon_graph_data(file_path):
+def parse_amazon_graph_data(file_path, target_groups):
     """
-    Legge il file raw e restituisce:
-    1. Un dizionario di metadati dei nodi {ASIN: {data}}
-    2. Un dizionario di adiacenza {ASIN: [neighbors]}
+    Reads the raw file and returns:
+    1. A dictionary of node metadata {ASIN: {data}}
+    2. An adjacency dictionary {ASIN: [neighbors]}
     """
     metadata = {}
     adjacency = {}
@@ -34,83 +15,97 @@ def parse_amazon_graph_data(file_path):
     current_asin = None
     current_meta = {}
 
-    # Regex compilate per velocità
-    id_pattern = re.compile(r"^Id:\s+(\d+)")
+    # Regex compilate
     asin_pattern = re.compile(r"^ASIN:\s+(\w+)")
-    title_pattern = re.compile(r"^title:\s+(.+)")
     group_pattern = re.compile(r"^group:\s+(.+)")
     salesrank_pattern = re.compile(r"^salesrank:\s+(\d+)")
     similar_pattern = re.compile(r"^similar:\s+\d+\s+(.+)")
 
-    print(f"Inizio lettura file: {file_path}")
+    print(f"Starting reading {file_path}")
 
-    # Encoding 'utf-8' con 'ignore' per evitare crash su caratteri strani nel dataset
-    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
+    try:
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
 
-            # NUOVO PRODOTTO (Inizia con Id:)
-            if line.startswith("Id:"):
-                # Salva il prodotto precedente se valido e del gruppo giusto
-                if current_asin and current_meta.get("group") in TARGET_GROUPS:
-                    metadata[current_asin] = current_meta
+                # New product (starts with "Id:")
+                if line.startswith("Id:"):
+                    # If valid, save the previous product
+                    if current_asin and current_meta.get("group") in target_groups:
+                        metadata[current_asin] = current_meta
+                    # Reset
+                    current_asin = None
+                    current_meta = {}
 
-                # Reset variabili
-                current_asin = None
-                current_meta = {}
+                elif line.startswith("ASIN:"):
+                    match = asin_pattern.match(line)
+                    if match:
+                        current_asin = match.group(1)
+                        current_meta["ASIN"] = current_asin
 
-            elif line.startswith("ASIN:"):
-                match = asin_pattern.match(line)
-                if match:
-                    current_asin = match.group(1)
-                    current_meta["ASIN"] = current_asin
+                elif line.startswith("title:"):
+                    current_meta["title"] = line[6:].strip()
 
-            elif line.startswith("title:"):
-                current_meta["title"] = line[6:].strip()
+                elif line.startswith("group:"):
+                    match = group_pattern.match(line)
+                    if match:
+                        current_meta["group"] = match.group(1)
 
-            elif line.startswith("group:"):
-                match = group_pattern.match(line)
-                if match:
-                    current_meta["group"] = match.group(1)
+                elif line.startswith("salesrank:"):
+                    match = salesrank_pattern.match(line)
+                    if match:
+                        current_meta["salesrank"] = int(match.group(1))
 
-            elif line.startswith("salesrank:"):
-                match = salesrank_pattern.match(line)
-                if match:
-                    current_meta["salesrank"] = int(match.group(1))
+                elif line.startswith("similar:"):
+                    match = similar_pattern.match(line)
+                    if match and current_asin:
+                        neighbors = match.group(1).split()
+                        adjacency[current_asin] = neighbors
 
-            elif line.startswith("similar:"):
-                match = similar_pattern.match(line)
-                if match and current_asin:
-                    neighbors = match.group(1).split()
-                    adjacency[current_asin] = neighbors
+            # Save the last product
+            if current_asin and current_meta.get("group") in target_groups:
+                metadata[current_asin] = current_meta
 
-        # Salva l'ultimo prodotto alla fine del file
-        if current_asin and current_meta.get("group") in TARGET_GROUPS:
-            metadata[current_asin] = current_meta
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Dataset not found: {file_path}")
 
     return metadata, adjacency
 
 
-if __name__ == "__main__":
-    # --- ESECUZIONE PARSING ---
-    # Nota: Assicurati che RAW_DATA_PATH punti al file corretto sul tuo PC
-    if not os.path.exists(RAW_DATA_PATH):
-        print(f"ERRORE: File non trovato in {RAW_DATA_PATH}")
+def create_graph_pickle(input_path, output_path, target_groups=None):
+    """
+    1. Reads the raw data.
+    2. Builds the graph.
+    3. Extracts the GCC.
+    4. Saves the pickle.
+
+    Returns: The path of the generated output file.
+    """
+
+    if target_groups is None:
+        target_groups = {"Book", "DVD", "Video", "Music"}
+
+    if not os.path.exists(input_path):
+        print(f"ERROR: Input file not found in {input_path}")
     else:
-        nodes_dict, edges_dict = parse_amazon_graph_data(RAW_DATA_PATH)
-        print(f"Nodi validi trovati (filtrati per gruppo): {len(nodes_dict)}")
 
-        # --- COSTRUZIONE DEL GRAFO ---
-        print("Costruzione del grafo NetworkX (DIRETTO)...")
-        G = nx.DiGraph()  # Grafo DIRETTO (DiGraph)
+        # Create the output folder if needed
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-        # 1. Aggiungi i nodi
+        nodes_dict, edges_dict = parse_amazon_graph_data(input_path, target_groups)
+        print(f"Found {len(nodes_dict)} valid nodes")
+
+        # Graph construction
+        print("Building the directed NetworkX graph...")
+        G = nx.DiGraph()
+
+        # Add nodes
         for asin, data in nodes_dict.items():
             G.add_node(asin, **data)
 
-        # 2. Aggiungi gli archi (solo se entrambi i nodi esistono)
+        # Add edges
         edge_count = 0
         for u, neighbors in edges_dict.items():
             if u in nodes_dict:
@@ -119,14 +114,12 @@ if __name__ == "__main__":
                         G.add_edge(u, v)
                         edge_count += 1
 
-        print(f"Grafo costruito.")
-        print(f"Nodi Totali: {G.number_of_nodes()}")
-        print(f"Archi Totali: {G.number_of_edges()}")
+        print(f"Graph construction completed.")
+        print(f"Nodes: {G.number_of_nodes()}")
+        print(f"Edges: {G.number_of_edges()}")
 
-        # --- ESTRAZIONE COMPONENTE GIGANTE (LWCC) ---
-        # Per grafi diretti, usiamo la componente DEBOLMENTE connessa più grande
-        print("Estrazione della Componente Debolmente Connessa Gigante (LWCC)...")
-        # Nota: per DiGraph si usa weakly_connected_components
+        # Largest Weakly Connected Component
+        print("Extracting the Largest Weakly Connected Component...")
         connected_components = sorted(
             nx.weakly_connected_components(G), key=len, reverse=True
         )
@@ -135,17 +128,16 @@ if __name__ == "__main__":
             giant_component_nodes = connected_components[0]
             G_giant = G.subgraph(giant_component_nodes).copy()
 
-            print(f"GCC estratta.")
-            print(f"Nodi GCC: {G_giant.number_of_nodes()}")
-            print(f"Archi GCC: {G_giant.number_of_edges()}")
+            print(f"LWCC extraction completed.")
+            print(f"LWCC nodes: {G_giant.number_of_nodes()}")
+            print(f"LWCC edges: {G_giant.number_of_edges()}")
 
-            # --- SALVATAGGIO ---
-            print(f"Salvataggio in {OUTPUT_PATH}...")
-            with open(OUTPUT_PATH, "wb") as f:
+            # Save the graph in .pickle format
+            print(f"Saving to {output_path}...")
+            with open(output_path, "wb") as f:
                 pickle.dump(G_giant, f, protocol=pickle.HIGHEST_PROTOCOL)
-
-            print("Fatto! File .pickle generato con successo.")
+            print("Done!")
         else:
             print(
-                "Errore: Il grafo sembra essere vuoto o non avere componenti connesse."
+                "Error: the graph seems empty or connected components are missing."
             )

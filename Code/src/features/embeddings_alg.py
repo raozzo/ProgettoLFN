@@ -2,6 +2,7 @@ import os
 import time
 import pandas as pd
 import networkx as nx
+import umap
 
 def get_node2vec_embeddings(G, version = 'cuda', embedding_dim=128,
                             walk_length=80, context_size=10, walks_per_node=10, p=1, q=2,
@@ -217,3 +218,37 @@ def get_node2vec_emb_GPU(G, embedding_dim=128,
     df = df.rename(columns={'index': 'ASIN'}) # rename the "index" column
 
     return df
+
+
+def apply_umap(df_embeddings, n_components=10, n_neighbors=30, min_dist=0.0):
+
+    print(f"Starting UMAP reduction on {len(df_embeddings)} nodes...")
+    print(f"Reduction from {df_embeddings.shape[1] - 1} to {n_components} dimensions.")
+
+    df_embeddings = df_embeddings.reset_index()
+    if 'ASIN' not in df_embeddings.columns:
+        df_embeddings = df_embeddings.rename(columns={'index': 'ASIN', 'level_0': 'ASIN'})
+
+    ids = df_embeddings['ASIN']
+    feature_cols = [c for c in df_embeddings.columns if c.startswith('emb_')]
+    X = df_embeddings[feature_cols].values
+
+    reducer = umap.UMAP(
+        n_components=n_components,
+        n_neighbors=n_neighbors,
+        min_dist=min_dist,
+        metric='cosine',
+        low_memory=False,
+        random_state=42,
+        verbose=True
+    )
+
+    X_reduced = reducer.fit_transform(X)
+    df_umap = pd.DataFrame(
+        X_reduced,
+        columns=[f"umap_{i}" for i in range(n_components)]
+    )
+    df_umap.insert(0, 'ASIN', ids)
+
+    print("UMAP completed. Returning reduced DataFrame.")
+    return df_umap
