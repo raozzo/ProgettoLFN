@@ -1,7 +1,9 @@
 Code/data/amazon-meta.txt filter=lfs diff=lfs merge=lfs -text
 Code/data/amazon-meta.txt.gz filter=lfs diff=lfs merge=lfs -text
+Code/data/processed/bet_scores.csv filter=lfs diff=lfs merge=lfs -text
+Code/data/processed/clus_scores.csv filter=lfs diff=lfs merge=lfs -text
 Code/data/processed/embeddings.csv filter=lfs diff=lfs merge=lfs -text
-Code/data/processed/embeddings_p1_q1.csv filter=lfs diff=lfs merge=lfs -text
-Code/data/processed/embeddings_p1_q2.csv filter=lfs diff=lfs merge=lfs -text
+Code/data/processed/embeddings_reduced.csv filter=lfs diff=lfs merge=lfs -text
 Code/data/processed/harmonic_scores.csv filter=lfs diff=lfs merge=lfs -text
-Code/data/processed/embeddings_p1_q2_reduced.csv filter=lfs diff=lfs merge=lfs -text
+Code/data/processed/pagerank_scores.csv filter=lfs diff=lfs merge=lfs -text
+Code/data/processed/review_scores.csv filter=lfs diff=lfs merge=lfs -text

@@ -540,10 +540,12 @@ def harmonic_CPU(G, p=10):
 
     # Results
     print("Returning data as pandas DataFrame...")
-    return pd.DataFrame({
+    df = pd.DataFrame({
         'ASIN': nodes,
         'HarmonicCentrality': harmonic_centrality
     })
+    df.set_index('ASIN', inplace=True)
+    return  df
 
 def harmonic_GPU(G, p=10):
     import cupy as cp
@@ -667,7 +669,9 @@ def harmonic_GPU(G, p=10):
 
     # Results
     print("Returning data as pandas DataFrame...")
-    return pd.DataFrame({
+    df = pd.DataFrame({
         'ASIN': nodes,
         'HarmonicCentrality': harmonic_centrality_gpu.get()
     })
+    df.set_index('ASIN', inplace=True)
+    return  df

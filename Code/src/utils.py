@@ -84,7 +84,7 @@ def load_or_compute(file_path, compute_func, force_recompute=False, **kwargs):
     print(f"Saving to {file_path}...")
     ext = file_path.suffix.lower()
 
-    # If result is a dict (like your scores), convert to DataFrame first for CSVs
+    # If result is a dict, convert to DataFrame first for CSVs
     if ext == ".csv":
         if isinstance(result, dict):
             # Convert {ASIN: score} dict to DataFrame
