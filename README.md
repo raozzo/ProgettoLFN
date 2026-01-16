@@ -1,12 +1,3 @@
-
----
-
-## Link utili 
-* [Cartella Drive](https://drive.google.com/drive/folders/14T74Tn7I2E42TKAConzHNnDavb_Vng_T?usp=drive_link)
-* [SNAP Dataset](https://snap.stanford.edu/data/amazon-meta.html)
-* [Network Repository](https://networkrepository.com/)
-
----
 # Learning From Networks: Comparative analysis of structural, learned, and hybrid feature representations for graph clustering
 
 This project explores and compares structural, learned (embeddings), and hybrid feature representations for clustering a graph based on the Amazon product dataset.
