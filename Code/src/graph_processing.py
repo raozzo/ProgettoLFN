@@ -2,6 +2,7 @@ import os
 import pickle
 import re
 import networkx as nx
+import pandas as pd
 
 def parse_amazon_graph_data(file_path, target_groups):
     """
@@ -141,3 +142,109 @@ def create_graph_pickle(input_path, output_path, target_groups=None):
             print(
                 "Error: the graph seems empty or connected components are missing."
             )
+
+
+def parse_reviews(file_path):
+    """
+    Generator that yields review score for each product.
+    Returns:
+    """
+    current_product = {}
+
+    # Regex to find the ASIN
+    asin_pattern = re.compile(r'ASIN:\s+(\w+)')
+    # Regex to extract review details: date, customer, rating, votes, helpful
+    # Line format: 2000-7-28  cutomer: A2...  rating: 5  votes:   6  helpful:   4
+    review_pattern = re.compile(r'rating:\s+(\d+)\s+votes:\s+(\d+)\s+helpful:\s+(\d+)')
+
+    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+        for line in f:
+            line = line.strip()
+
+            # Start of a new product block
+            if line.startswith("Id:"):
+                # Yield the previous product if it exists
+                if current_product:
+                    yield current_product
+                current_product = {'reviews': []}
+
+            elif line.startswith("ASIN:"):
+                match = asin_pattern.search(line)
+                if match:
+                    current_product['asin'] = match.group(1)
+
+            # Use 'group:' to filter immediately (Optional optimization)
+            elif line.startswith("group:"):
+                current_product['group'] = line.split("group:")[1].strip()
+
+            # Parse individual reviews
+            # Lines starting with a date (YYYY-M-D) contain the review data
+            elif re.match(r'\d+-\d+-\d+', line):
+                match = review_pattern.search(line)
+                if match:
+                    rating = int(match.group(1))
+                    votes = int(match.group(2))
+                    helpful = int(match.group(3))
+                    current_product['reviews'].append({
+                        'rating': rating,
+                        'votes': votes,
+                        'helpful': helpful
+                    })
+
+        # Yield the very last product
+        if current_product:
+            yield current_product
+
+def compute_review_scores(dataset_path, default_score=2.5, target_groups=None):
+
+    if target_groups is None:
+        target_groups = {"Book", "DVD", "Video", "Music"}
+
+    print("Parsing and computing scores... ")
+    data = []
+
+    for product in parse_reviews(dataset_path):
+        if product.get('group') not in target_groups:
+            continue
+
+        if 'asin' not in product:
+            continue
+
+        # FIX: before product with 0 reviews returned Nan, change to return a default score
+        reviews = product.get('reviews', [])
+
+        if not reviews:
+            data.append({
+                'ASIN': product['asin'],
+                'rw_score': default_score,
+                'num_reviews': 0
+            })
+            continue
+
+        weighted_sum = 0
+        total_weight = 0
+
+        for r in reviews:
+            # Weight = Helpful Votes + 1 (Smoothing)
+            weight = r['helpful'] + 1
+
+            weighted_sum += r['rating'] * weight
+            total_weight += weight
+
+        # Calculate weighted average
+        # If total_weight is 0 (shouldn't happen due to +1) to avoid division by zero
+        rw_score = weighted_sum / total_weight if total_weight > 0 else 0
+
+        # 3. Store result
+        data.append({
+            'ASIN': product['asin'],
+            'rw_score': rw_score,
+            'num_reviews': len(reviews)
+        })
+
+    # Convert to DataFrame
+    df_scores = pd.DataFrame(data)
+    df_scores.set_index('ASIN', inplace=True)
+
+    print(f"Computed scores for {len(df_scores)} products.")
+    return df_scores

@@ -375,14 +375,6 @@ def get_approx_betweenness(G, k=10, seed=42, use_networkx=False):
     while i < k:
 
         # Choose uniformly at random (s,t) from V with s != t
-        """
-        check = False
-        while check == False:
-            s = random.choice(V)
-            t = random.choice(V)
-            if s != t:
-                check = True
-        """
         s, t = random.sample(V, 2)
 
         # find the index of s and t in V
@@ -548,10 +540,12 @@ def harmonic_CPU(G, p=10):
 
     # Results
     print("Returning data as pandas DataFrame...")
-    return pd.DataFrame({
+    df = pd.DataFrame({
         'ASIN': nodes,
         'HarmonicCentrality': harmonic_centrality
     })
+    df.set_index('ASIN', inplace=True)
+    return  df
 
 def harmonic_GPU(G, p=10):
     import cupy as cp
@@ -675,7 +669,9 @@ def harmonic_GPU(G, p=10):
 
     # Results
     print("Returning data as pandas DataFrame...")
-    return pd.DataFrame({
+    df = pd.DataFrame({
         'ASIN': nodes,
         'HarmonicCentrality': harmonic_centrality_gpu.get()
     })
+    df.set_index('ASIN', inplace=True)
+    return  df

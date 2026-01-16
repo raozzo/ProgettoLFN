@@ -246,9 +246,10 @@ def apply_umap(df_embeddings, n_components=10, n_neighbors=30, min_dist=0.0, uma
     X_reduced = reducer.fit_transform(X)
     df_umap = pd.DataFrame(
         X_reduced,
-        columns=[f"umap_{i}" for i in range(n_components)]
+        columns=[f"umap_{i}" for i in range(n_components)],
+        index=ids
     )
-    df_umap.insert(0, 'ASIN', ids)
+    df_umap.index.name = 'ASIN'
 
     print("UMAP completed. Returning reduced DataFrame.")
     return df_umap
